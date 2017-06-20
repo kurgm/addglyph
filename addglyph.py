@@ -80,7 +80,7 @@ def get_chars_set(textfiles):
     return chars
 
 
-def addglyph(fontfile, textfiles):
+def addglyph(fontfile, textfiles, ivsfiles=[]):
     chars = get_chars_set(textfiles)
 
     try:
@@ -165,24 +165,53 @@ def addglyph(fontfile, textfiles):
 
 
 def main():
-    files = sys.argv[1:]
     fontfile = None
     textfiles = []
+    ivsfiles = []
 
-    for f in files:
-        if f[-4:].lower() in (".ttf", ".otf"):
+    args = iter(sys.argv[1:])
+    for arg in args:
+        if arg[:2] == "--":
+            argtype = arg[2:]
+            f = next(args)
+        elif arg[0] == "-":
+            argtype = {
+                "f": "font",
+                "t": "text",
+                "i": "ivs",
+            }.get(arg[1], arg[1])
+            if len(arg) == 2:
+                f = next(args)
+            else:
+                f = arg[2:]
+        else:
+            f = arg
+            if arg[-4:].lower() in (".ttf", ".otf"):
+                argtype = "font"
+            elif arg[:3].lower() == "ivs":
+                argtype = "ivs"
+            else:
+                argtype = "text"
+
+        if argtype == "font":
             assert fontfile is None, "multiple font files specified"
             fontfile = f
-        else:
+        elif argtype == "text":
             textfiles.append(f)
+        elif argtype == "ivs":
+            ivsfiles.append(f)
+        else:
+            raise "unknown option: {}".format(argtype)
 
     assert fontfile is not None, "no font file specified"
     assert textfiles, "no text files specified"
 
-    logging.info("font file = {}".format(fontfile))
-    logging.info("text file(s) = {}".format(", ".join(textfiles)))
+    logging.debug("font file = {}".format(fontfile))
+    logging.debug("text file(s) = {}".format(", ".join(textfiles)))
+    if ivsfiles:
+        logging.debug("ivs file(s) = {}".format(", ".join(ivsfiles)))
 
-    addglyph(fontfile, textfiles)
+    addglyph(fontfile, textfiles, ivsfiles)
 
 
 if __name__ == "__main__":
