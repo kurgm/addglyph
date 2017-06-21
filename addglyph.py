@@ -103,7 +103,7 @@ def get_chars_set(textfiles):
         try:
             with codecs.open(f, encoding="utf-8-sig") as infile:
                 dat = decodeEntity(infile.read())
-        except:
+        except Exception:
             logging.error("Error while loading text file '{}'".format(f))
             raise
         chars.update(iterstr(dat))
@@ -160,7 +160,7 @@ def get_vs_dict(vsfiles):
                             "Error while parsing VS text file line {}".format(lineno + 1))
                         raise
                     vs[seq] = is_default
-        except:
+        except Exception:
             logging.error("Error while loading VS text file '{}'".format(f))
             raise
 
@@ -178,7 +178,7 @@ def add_blank_glyph(glyphname, hmtx, vmtx, glyf):
 def addglyph(fontfile, chars, vs=[], outfont=None):
     try:
         ttf = TTFont(fontfile)
-    except:
+    except Exception:
         logging.error("Error while loading font file")
         raise
 
@@ -282,7 +282,7 @@ def addglyph(fontfile, chars, vs=[], outfont=None):
                     "prep", "cmap", "loca", "hmtx", "mort", "GSUB", "vhea", "vmtx",
                     "glyf"
                 ])
-    except:
+    except Exception:
         logging.error("Error while saving font file")
         raise
 
