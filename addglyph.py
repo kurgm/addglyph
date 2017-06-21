@@ -16,6 +16,8 @@ from fontTools.ttLib import TTFont, reorderFontTables
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f
 
 
+version = "2.0"
+
 PY2 = sys.version_info < (3, 0)
 
 hexEntityRe = re.compile(r"&#x([\da-fA-F]+);")
@@ -45,6 +47,24 @@ else:
     myunichr = unichr
     iterstr = iter
     myord = ord
+
+
+def print_help():
+    print("""\
+usage: {prog} -f fontfile [-t textfile]... [-v vsfile]...
+
+addglyph -- version {version}
+Adds blank glyphs to a TrueType or OpenType font file.
+
+Options:
+  -h, --help   print this message.
+  -f fontfile  specify a font file to add glyphs to.
+  -t textfile  specify text files that contain characters to add.
+  -v vsfile    specify variation sequence data files.
+""".format(
+        prog=sys.argv[0],
+        version=version,
+    ))
 
 
 def decodeEntity(s):
@@ -232,6 +252,17 @@ def main():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
+
+    if {"-h", "--help"}.intersection(sys.argv[1:]):
+        print_help()
+        pause()
+        sys.exit(0)
+
+    if "--version" in sys.argv[1:]:
+        print(version)
+        pause()
+        sys.exit(0)
+
     try:
         main()
     except:
