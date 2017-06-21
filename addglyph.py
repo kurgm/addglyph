@@ -80,9 +80,23 @@ def get_chars_set(textfiles):
     return chars
 
 
-def addglyph(fontfile, textfiles, ivsfiles=[]):
-    chars = get_chars_set(textfiles)
+def get_ivs_dict(ivsfiles):
+    ivs = {}
 
+    for f in ivsfiles:
+        try:
+            with codecs.open(f, encoding="utf-8-sig") as infile:
+                for line in infile:
+                    line = decodeEntity(line)
+                    # TODO
+        except:
+            logging.error("Error while loading IVS text file '{}'".format(f))
+            raise
+
+    return ivs
+
+
+def addglyph(fontfile, chars, ivs=[]):
     try:
         ttf = TTFont(fontfile)
     except:
@@ -211,7 +225,9 @@ def main():
     if ivsfiles:
         logging.debug("ivs file(s) = {}".format(", ".join(ivsfiles)))
 
-    addglyph(fontfile, textfiles, ivsfiles)
+    chars = get_chars_set(textfiles)
+    ivs = get_ivs_dict(ivsfiles)
+    addglyph(fontfile, chars, ivs)
 
 
 if __name__ == "__main__":
