@@ -80,23 +80,23 @@ def get_chars_set(textfiles):
     return chars
 
 
-def get_ivs_dict(ivsfiles):
-    ivs = {}
+def get_vs_dict(vsfiles):
+    vs = {}
 
-    for f in ivsfiles:
+    for f in vsfiles:
         try:
             with codecs.open(f, encoding="utf-8-sig") as infile:
                 for line in infile:
                     line = decodeEntity(line)
                     # TODO
         except:
-            logging.error("Error while loading IVS text file '{}'".format(f))
+            logging.error("Error while loading VS text file '{}'".format(f))
             raise
 
-    return ivs
+    return vs
 
 
-def addglyph(fontfile, chars, ivs=[]):
+def addglyph(fontfile, chars, vs=[]):
     try:
         ttf = TTFont(fontfile)
     except:
@@ -181,7 +181,7 @@ def addglyph(fontfile, chars, ivs=[]):
 def main():
     fontfile = None
     textfiles = []
-    ivsfiles = []
+    vsfiles = []
 
     args = iter(sys.argv[1:])
     for arg in args:
@@ -192,7 +192,7 @@ def main():
             argtype = {
                 "f": "font",
                 "t": "text",
-                "i": "ivs",
+                "v": "vs",
             }.get(arg[1], arg[1])
             if len(arg) == 2:
                 f = next(args)
@@ -202,8 +202,8 @@ def main():
             f = arg
             if arg[-4:].lower() in (".ttf", ".otf"):
                 argtype = "font"
-            elif arg[:3].lower() == "ivs":
-                argtype = "ivs"
+            elif arg[:2].lower() == "vs":
+                argtype = "vs"
             else:
                 argtype = "text"
 
@@ -212,8 +212,8 @@ def main():
             fontfile = f
         elif argtype == "text":
             textfiles.append(f)
-        elif argtype == "ivs":
-            ivsfiles.append(f)
+        elif argtype == "vs":
+            vsfiles.append(f)
         else:
             raise "unknown option: {}".format(argtype)
 
@@ -222,12 +222,12 @@ def main():
 
     logging.debug("font file = {}".format(fontfile))
     logging.debug("text file(s) = {}".format(", ".join(textfiles)))
-    if ivsfiles:
-        logging.debug("ivs file(s) = {}".format(", ".join(ivsfiles)))
+    if vsfiles:
+        logging.debug("VS file(s) = {}".format(", ".join(vsfiles)))
 
     chars = get_chars_set(textfiles)
-    ivs = get_ivs_dict(ivsfiles)
-    addglyph(fontfile, chars, ivs)
+    vs = get_vs_dict(vsfiles)
+    addglyph(fontfile, chars, vs)
 
 
 if __name__ == "__main__":
