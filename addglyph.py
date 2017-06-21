@@ -61,6 +61,9 @@ Options:
   -f fontfile  specify a font file to add glyphs to.
   -t textfile  specify text files that contain characters to add.
   -v vsfile    specify variation sequence data files.
+  -o outfile   specify the a file to write the output to.
+  -q, --quiet  will not write log message to stderr.
+  -b, --batch  will not pause on exit.
 """.format(
         prog=sys.argv[0],
         version=version,
@@ -78,10 +81,16 @@ def decodeEntity(s):
 
 
 def pause():
+    if pause.batch:
+        return
+
     if os.name == "nt":
         os.system("pause")
     else:
         raw_input("Press Enter to continue . . .")
+
+
+pause.batch = False
 
 
 def get_chars_set(textfiles):
@@ -116,7 +125,7 @@ def get_vs_dict(vsfiles):
     return vs
 
 
-def addglyph(fontfile, chars, vs=[]):
+def addglyph(fontfile, chars, vs=[], outfont=None):
     try:
         ttf = TTFont(fontfile)
     except:
@@ -176,7 +185,9 @@ def addglyph(fontfile, chars, vs=[]):
     logging.info("{} glyphs added!".format(added_count))
     logging.info("saving...")
 
-    outfont = fontfile[:-4] + "_new" + fontfile[-4:]
+    if outfont is None:
+        outfont = fontfile[:-4] + "_new" + fontfile[-4:]
+
     try:
         with TemporaryFile(prefix="add-glyphs") as tmp:
             ttf.save(tmp, reorderTables=False)
@@ -202,22 +213,38 @@ def main():
     fontfile = None
     textfiles = []
     vsfiles = []
+    outfont = None
+
+    no_arg_types = {"quiet", "batch"}
 
     args = iter(sys.argv[1:])
     for arg in args:
         if arg[:2] == "--":
             argtype = arg[2:]
-            f = next(args)
+            if argtype not in no_arg_types:
+                try:
+                    f = next(args)
+                except StopIteration:
+                    raise ValueError(
+                        "arguments for the option '{}' is missing".format(argtype))
         elif arg[0] == "-":
             argtype = {
                 "f": "font",
                 "t": "text",
                 "v": "vs",
+                "o": "out",
+                "q": "quiet",
+                "b": "batch",
             }.get(arg[1], arg[1])
-            if len(arg) == 2:
-                f = next(args)
-            else:
-                f = arg[2:]
+            if argtype not in no_arg_types:
+                if len(arg) == 2:
+                    try:
+                        f = next(args)
+                    except StopIteration:
+                        raise ValueError(
+                            "arguments for the option '{}' is missing".format(argtype))
+                else:
+                    f = arg[2:]
         else:
             f = arg
             if arg[-4:].lower() in (".ttf", ".otf"):
@@ -234,8 +261,14 @@ def main():
             textfiles.append(f)
         elif argtype == "vs":
             vsfiles.append(f)
+        elif argtype == "out":
+            outfont = f
+        elif argtype == "quiet":
+            pass
+        elif argtype == "batch":
+            pass
         else:
-            raise "unknown option: {}".format(argtype)
+            raise ValueError("unknown option: {}".format(argtype))
 
     assert fontfile is not None, "no font file specified"
     assert textfiles, "no text files specified"
@@ -244,14 +277,22 @@ def main():
     logging.debug("text file(s) = {}".format(", ".join(textfiles)))
     if vsfiles:
         logging.debug("VS file(s) = {}".format(", ".join(vsfiles)))
+    if outfont is not None:
+        logging.debug("out = {}".format(outfont))
 
     chars = get_chars_set(textfiles)
     vs = get_vs_dict(vsfiles)
-    addglyph(fontfile, chars, vs)
+    addglyph(fontfile, chars, vs, outfont)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    if {"-q", "--quiet"}.intersection(sys.argv[1:]):
+        logging.basicConfig(level=logging.ERROR)
+    else:
+        logging.basicConfig(level=logging.DEBUG)
+
+    if {"-b", "--batch"}.intersection(sys.argv[1:]):
+        pause.batch = True
 
     if {"-h", "--help"}.intersection(sys.argv[1:]):
         print_help()
