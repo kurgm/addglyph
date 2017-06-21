@@ -40,7 +40,7 @@ if sys.maxunicode == 0xFFFF:
     def myord(s):
         if len(s) == 1:
             return ord(s)
-        assert len(s) == 2 and "\uD800" <= s[0] < "\uDC00"
+        assert len(s) == 2 and "\uD800" <= s[0] < "\uDC00", "Invalid UTF-16 character"
         return int(s.encode("utf-32_be").encode("hex_codec"), 16)
 
 else:
@@ -161,6 +161,7 @@ def addglyph(fontfile, chars, vs=[], outfont=None):
     glyf = ttf["glyf"]
 
     added_count = 0
+
     for char in chars:
         codepoint = myord(char)
         if codepoint in smap:
@@ -184,6 +185,10 @@ def addglyph(fontfile, chars, vs=[], outfont=None):
 
         logging.info("added: U+{:04X}".format(codepoint))
         added_count += 1
+
+    for seq, add in vs.items():
+        # TODO
+        pass
 
     logging.info("{} glyphs added!".format(added_count))
     logging.info("saving...")
@@ -274,10 +279,11 @@ def main():
             raise ValueError("unknown option: {}".format(argtype))
 
     assert fontfile is not None, "no font file specified"
-    assert textfiles, "no text files specified"
+    assert textfiles or vsfiles, "no text files or vs files specified"
 
     logging.debug("font file = {}".format(fontfile))
-    logging.debug("text file(s) = {}".format(", ".join(textfiles)))
+    if textfiles:
+        logging.debug("text file(s) = {}".format(", ".join(textfiles)))
     if vsfiles:
         logging.debug("VS file(s) = {}".format(", ".join(vsfiles)))
     if outfont is not None:
@@ -289,20 +295,22 @@ def main():
 
 
 if __name__ == "__main__":
-    if {"-q", "--quiet"}.intersection(sys.argv[1:]):
+    args = sys.argv[1:]
+
+    if {"-q", "--quiet"}.intersection(args):
         logging.basicConfig(level=logging.ERROR)
     else:
         logging.basicConfig(level=logging.DEBUG)
 
-    if {"-b", "--batch"}.intersection(sys.argv[1:]):
+    if {"-b", "--batch"}.intersection(args):
         pause.batch = True
 
-    if {"-h", "--help"}.intersection(sys.argv[1:]):
+    if {"-h", "--help"}.intersection(args):
         print_help()
         pause()
         sys.exit(0)
 
-    if "--version" in sys.argv[1:]:
+    if "--version" in args:
         print(version)
         pause()
         sys.exit(0)
