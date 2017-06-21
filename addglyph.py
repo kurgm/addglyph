@@ -114,9 +114,17 @@ def get_chars_set(textfiles):
 
 def parse_vs_line(line):
     row = [decodeEntity(col) for col in line.split()]
-    if len(row) != 2:
+    if not row:
+        # empty line
+        return
+
+    if len(row) > 2:
         raise SyntaxError("invalid number of columns: {}".format(len(row)))
-    seq_str, is_default_str = row
+    elif len(row) == 2:
+        seq_str, is_default_str = row
+    else:
+        seq_str = row[0]
+        is_default_str = False
 
     seq = [myord(c) for c in iterstr(seq_str)]
     if len(seq) != 2:
@@ -142,7 +150,11 @@ def get_vs_dict(vsfiles):
             with codecs.open(f, encoding="utf-8-sig") as infile:
                 for lineno, line in enumerate(infile):
                     try:
-                        seq, is_default = parse_vs_line(line)
+                        dat = parse_vs_line(line)
+                        if dat is None:
+                            # empty line
+                            continue
+                        seq, is_default = dat
                     except SyntaxError:
                         logging.error(
                             "Error while parsing VS text file line {}".format(lineno + 1))
