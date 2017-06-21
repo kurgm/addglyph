@@ -2,7 +2,9 @@
 
 from distutils.core import setup
 
-import py2exe
+import py2exe  # NOQA
+
+from addglyph import version
 
 setup(
 	options={
@@ -14,9 +16,9 @@ setup(
 	},
 	console=[{"script": "addglyph.py"}],
 	zipfile=None,
-	data_files=["readme.txt"],
+	data_files=["usage.txt"],
 	name="Add Glyphs",
-	version="1.2",
+	version=version,
 	description="Adds blank glyphs to a font file",
 	author="Kurogoma"
 )

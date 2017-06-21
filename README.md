@@ -10,7 +10,7 @@
 
 ## Windows バイナリのビルド
 
-1. `pip install fontTools`
+1. `pip install fonttools`
 2. py2exe をインストール（Python 3 では `pip install py2exe`）
 3. `python setup.py py2exe`
 4. dist フォルダに addglyph.exe ができる
