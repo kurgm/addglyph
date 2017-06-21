@@ -112,20 +112,55 @@ def get_chars_set(textfiles):
     return chars
 
 
+def parse_vs_line(line):
+    row = [decodeEntity(col) for col in line.split()]
+    if len(row) != 2:
+        raise SyntaxError("invalid number of columns: {}".format(len(row)))
+    seq_str, is_default_str = row
+
+    seq = [myord(c) for c in iterstr(seq_str)]
+    if len(seq) != 2:
+        raise SyntaxError(
+            "invalid variation sequence length: {}".format(len(seq)))
+
+    if is_default_str == "D":
+        is_default = True
+    elif is_default_str == "":
+        is_default = False
+    else:
+        raise SyntaxError(
+            "invalid default variation sequence option: {}".format(is_default_str))
+
+    return seq, is_default
+
+
 def get_vs_dict(vsfiles):
     vs = {}
 
     for f in vsfiles:
         try:
             with codecs.open(f, encoding="utf-8-sig") as infile:
-                for line in infile:
-                    line = decodeEntity(line)
-                    # TODO
+                for lineno, line in enumerate(infile):
+                    try:
+                        seq, is_default = parse_vs_line(line)
+                    except SyntaxError:
+                        logging.error(
+                            "Error while parsing VS text file line {}".format(lineno + 1))
+                        raise
+                    vs[seq] = is_default
         except:
             logging.error("Error while loading VS text file '{}'".format(f))
             raise
 
     return vs
+
+
+def add_blank_glyph(glyphname, hmtx, vmtx, glyf):
+    hmtx[glyphname] = vmtx[glyphname] = (1024, 0)
+
+    glyph = _g_l_y_f.Glyph()
+    glyph.xMin = glyph.yMin = glyph.xMax = glyph.yMax = 0
+    glyf[glyphname] = glyph
 
 
 def addglyph(fontfile, chars, vs=[], outfont=None):
@@ -140,7 +175,7 @@ def addglyph(fontfile, chars, vs=[], outfont=None):
     subt = cmap.getcmap(platformID=3, platEncID=10)
     if subt is None:
         assert sub4 is not None, "cmap subtable (format=4) not found"
-        subt = _c_m_a_p.cmap_format_12(12)
+        subt = _c_m_a_p.CmapSubtable.newSubtable(12)
         subt.platformID = 3
         subt.platEncID = 10
         subt.format = 12
@@ -153,6 +188,18 @@ def addglyph(fontfile, chars, vs=[], outfont=None):
         subt.cmap.update(sub4.cmap)
         cmap.tables.append(subt)
         logging.info("cmap subtable (format=12) created")
+
+    sub14 = cmap.getcmap(platformID=0, platEncID=5)
+    if vs and sub14 is None:
+        sub14 = _c_m_a_p.CmapSubtable.newSubtable(14)
+        sub14.platformID = 0
+        sub14.platEncID = 5
+        sub14.format = 14
+        sub14.length = 0  # will be recalculated by compiler
+        sub14.numVarSelectorRecords = 0  # will be recalculated by compiler
+        sub14.language = 0xFF
+        sub14.cmap = {}
+        sub14.uvsDict = {}
 
     smap = subt.cmap
 
@@ -177,18 +224,31 @@ def addglyph(fontfile, chars, vs=[], outfont=None):
 
         smap[codepoint] = glyphname
 
-        hmtx[glyphname] = vmtx[glyphname] = (1024, 0)
-
-        glyph = _g_l_y_f.Glyph()
-        glyph.xMin = glyph.yMin = glyph.xMax = glyph.yMax = 0
-        glyf[glyphname] = glyph
+        add_blank_glyph(glyphname, hmtx, vmtx, glyf)
 
         logging.info("added: U+{:04X}".format(codepoint))
         added_count += 1
 
-    for seq, add in vs.items():
-        # TODO
-        pass
+    for seq, is_default in vs.items():
+        base, selector = seq
+        if any(uv == base for uv, gname in sub14.uvsDict.get(selector, [])):
+            logging.info(
+                "already in font: U+{:04X} U+{:04X}".format(base, selector))
+            continue
+
+        if is_default:
+            glyphname = None
+            logging.info(
+                "added: U+{:04X} U+{:04X} as default".format(base, selector))
+        else:
+            glyphname = "u{:04X}u{:04X}".format(base, selector)
+            add_blank_glyph(glyphname, hmtx, vmtx, glyf)
+
+            logging.info(
+                "added: U+{:04X} U+{:04X} as non-default".format(base, selector))
+
+        sub14.uvsDict.setdefault(selector, []).append([base, glyphname])
+        added_count += 1
 
     logging.info("{} glyphs added!".format(added_count))
     logging.info("saving...")
@@ -317,7 +377,7 @@ if __name__ == "__main__":
 
     try:
         main()
-    except:
+    except Exception:
         logging.exception("An error occurred")
         pause()
         sys.exit(1)
