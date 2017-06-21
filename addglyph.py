@@ -56,11 +56,14 @@ usage: {prog} -f fontfile [-t textfile]... [-v vsfile]...
 addglyph -- version {version}
 Adds blank glyphs to a TrueType or OpenType font file.
 
-Options:
-  -h, --help   print this message.
+Arguments:
   -f fontfile  specify a font file to add glyphs to.
   -t textfile  specify text files that contain characters to add.
   -v vsfile    specify variation sequence data files.
+
+Options:
+  -h, --help   print this message and exit.
+  --version    print the version and exit.
   -o outfile   specify the a file to write the output to.
   -q, --quiet  will not write log message to stderr.
   -b, --batch  will not pause on exit.
