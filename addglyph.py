@@ -124,9 +124,9 @@ def parse_vs_line(line):
         seq_str, is_default_str = row
     else:
         seq_str = row[0]
-        is_default_str = False
+        is_default_str = ""
 
-    seq = [myord(c) for c in iterstr(seq_str)]
+    seq = tuple([myord(c) for c in iterstr(seq_str)])
     if len(seq) != 2:
         raise SyntaxError(
             "invalid variation sequence length: {}".format(len(seq)))
@@ -212,6 +212,8 @@ def addglyph(fontfile, chars, vs=[], outfont=None):
         sub14.language = 0xFF
         sub14.cmap = {}
         sub14.uvsDict = {}
+        cmap.tables.append(sub14)
+        logging.info("cmap subtable (format=14) created")
 
     smap = subt.cmap
 
@@ -329,7 +331,7 @@ def main():
             f = arg
             if arg[-4:].lower() in (".ttf", ".otf"):
                 argtype = "font"
-            elif arg[:2].lower() == "vs":
+            elif os.path.basename(arg)[:2].lower() == "vs":
                 argtype = "vs"
             else:
                 argtype = "text"
