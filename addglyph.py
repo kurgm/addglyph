@@ -220,6 +220,7 @@ def addglyph(fontfile, chars, vs=[], outfont=None):
     hmtx = ttf["hmtx"]
     vmtx = ttf["vmtx"]
     glyf = ttf["glyf"]
+    glyf.padding = 4
 
     added_count = 0
 
