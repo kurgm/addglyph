@@ -177,7 +177,10 @@ def add_blank_glyph(glyphname, hmtx, vmtx, glyf):
 
 def addglyph(fontfile, chars, vs=[], outfont=None):
     try:
-        ttf = TTFont(fontfile)
+        ttf = TTFont(
+            fontfile,
+            recalcBBoxes=False  # Adding blank glyphs will not change bboxes
+        )
     except Exception:
         logging.error("Error while loading font file")
         raise
