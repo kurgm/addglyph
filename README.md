@@ -11,7 +11,7 @@
 ## Windows バイナリのビルド
 
 1. `pip install fonttools pyinstaller`
-2. `pyinstaller.bat`
+2. `build.bat`
 3. dist フォルダに addglyph.exe ができる
 
 
