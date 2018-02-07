@@ -13,7 +13,7 @@ import sys
 from tempfile import TemporaryFile
 
 from fontTools.ttLib import TTFont, reorderFontTables
-from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f
+from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables
 
 
 version = "2.0"
@@ -40,7 +40,8 @@ if sys.maxunicode == 0xFFFF:
     def myord(s):
         if len(s) == 1:
             return ord(s)
-        assert len(s) == 2 and "\uD800" <= s[0] < "\uDC00", "Invalid UTF-16 character"
+        assert len(s) == 2 and "\uD800" <= s[0] < "\uDC00", \
+            "Invalid UTF-16 character"
         return int(s.encode("utf-32_be").encode("hex_codec"), 16)
 
 else:
@@ -67,10 +68,7 @@ Options:
   -o outfile   specify the a file to write the output to.
   -q, --quiet  will not write log message to stderr.
   -b, --batch  will not pause on exit.
-""".format(
-        prog=sys.argv[0],
-        version=version,
-    ))
+""".format(prog=sys.argv[0], version=version))
 
 
 def decodeEntity(s):
@@ -116,7 +114,7 @@ def parse_vs_line(line):
     row = [decodeEntity(col) for col in line.split()]
     if not row:
         # empty line
-        return
+        return None
 
     if len(row) > 2:
         raise SyntaxError("invalid number of columns: {}".format(len(row)))
@@ -175,16 +173,7 @@ def add_blank_glyph(glyphname, hmtx, vmtx, glyf):
     glyf[glyphname] = glyph
 
 
-def addglyph(fontfile, chars, vs=[], outfont=None):
-    try:
-        ttf = TTFont(
-            fontfile,
-            recalcBBoxes=False  # Adding blank glyphs will not change bboxes
-        )
-    except Exception:
-        logging.error("Error while loading font file")
-        raise
-
+def get_cmap(ttf, vs=False):
     cmap = ttf["cmap"]
     sub4 = cmap.getcmap(platformID=3, platEncID=1)
     subt = cmap.getcmap(platformID=3, platEncID=10)
@@ -218,7 +207,95 @@ def addglyph(fontfile, chars, vs=[], outfont=None):
         cmap.tables.append(sub14)
         logging.info("cmap subtable (format=14) created")
 
-    smap = subt.cmap
+    return sub4, subt, sub14
+
+
+def get_glyphname(codepoint):
+    if codepoint < 0x10000:
+        glyphname = "uni{:04X}".format(codepoint)
+    else:
+        glyphname = "u{:04X}".format(codepoint)
+    return glyphname
+
+
+def add_to_cmap(codepoint, glyphname, sub4, subt):
+    if codepoint < 0x10000 and sub4 is not None:
+        sub4.cmap.setdefault(codepoint, glyphname)
+    subt.cmap[codepoint] = glyphname
+
+
+def add_to_cmap_vs(base, selector, glyphname, sub14):
+    sub14.uvsDict.setdefault(selector, []).append([base, glyphname])
+
+
+def check_vs(ttf):
+    # Check for VS font requirements on Windows 7
+    # Reference: http://glyphwiki.org/wiki/User:emk
+
+    _sub4, subt, sub14 = get_cmap(ttf, vs=True)
+
+    if 0x20 not in subt.cmap:
+        logging.info(
+            "U+0020 should be added for VS to work on Windows 7")
+
+    if all(codepoint < 0x10000 for codepoint in subt.cmap.keys()):
+        logging.info(
+            "at least one non-BMP character should be added for VS to work on Windows 7")
+
+    # Don't use Default UVS Table
+    for selector, uvList in sub14.uvsDict.items():
+        if any(glyphname is None for base, glyphname in uvList):
+            newUvList = []
+            for base, glyphname in uvList:
+                if glyphname is None:
+                    assert base in subt.cmap, \
+                        "base character (U+{:04X}) not in font".format(base)
+                    newUvList.append([base, subt.cmap[base]])
+                else:
+                    newUvList.append([base, glyphname])
+            sub14.uvsDict[selector] = newUvList
+
+    # set 57th bit of ulUnicodeRange in OS/2 table
+    os2 = ttf["OS/2"]
+    os2.ulUnicodeRange2 |= 1 << (57 - 32)
+
+    gsub = ttf["GSUB"]
+    records = gsub.table.ScriptList.ScriptRecord
+    if not any(record.ScriptTag == "hani" for record in records):
+        # pylint: disable=E1101
+        scriptrecord = otTables.ScriptRecord()
+        scriptrecord.ScriptTag = "hani"
+        scriptrecord.Script = otTables.Script()
+        scriptrecord.Script.DefaultLangSys = otTables.DefaultLangSys()
+        scriptrecord.Script.DefaultLangSys.ReqFeatureIndex = 65535
+        scriptrecord.Script.DefaultLangSys.FeatureCount = 1
+        feature_index = gsub.table.FeatureList.FeatureCount
+        scriptrecord.Script.DefaultLangSys.FeatureIndex = [feature_index]
+        records.append(scriptrecord)
+        gsub.table.ScriptList.ScriptCount += 1
+
+        featurerecord = otTables.FeatureRecord()
+        featurerecord.FeatureTag = "aalt"
+        featurerecord.Feature = otTables.Feature()
+        featurerecord.Feature.FeatureParams = None
+        featurerecord.Feature.LookupCount = 0
+        featurerecord.Feature.LookupListIndex = []
+        gsub.table.FeatureList.FeatureRecord.append(featurerecord)
+        gsub.table.FeatureList.FeatureCount += 1
+        # pylint: enable=E1101
+
+
+def addglyph(fontfile, chars, vs={}, outfont=None):
+    try:
+        ttf = TTFont(
+            fontfile,
+            recalcBBoxes=False  # Adding blank glyphs will not change bboxes
+        )
+    except Exception:
+        logging.error("Error while loading font file")
+        raise
+
+    sub4, subt, sub14 = get_cmap(ttf, vs=bool(vs))
 
     hmtx = ttf["hmtx"]
     vmtx = ttf["vmtx"]
@@ -229,19 +306,13 @@ def addglyph(fontfile, chars, vs=[], outfont=None):
 
     for char in chars:
         codepoint = myord(char)
-        if codepoint in smap:
+        if codepoint in subt.cmap:
             logging.info("already in font: U+{:04X}".format(codepoint))
             continue
 
-        if codepoint < 0x10000:
-            glyphname = "uni{:04X}".format(codepoint)
-            if sub4 is not None:
-                sub4.cmap.setdefault(codepoint, glyphname)
-        else:
-            glyphname = "u{:04X}".format(codepoint)
+        glyphname = get_glyphname(codepoint)
 
-        smap[codepoint] = glyphname
-
+        add_to_cmap(codepoint, glyphname, sub4, subt)
         add_blank_glyph(glyphname, hmtx, vmtx, glyf)
 
         logging.info("added: U+{:04X}".format(codepoint))
@@ -255,18 +326,33 @@ def addglyph(fontfile, chars, vs=[], outfont=None):
             continue
 
         if is_default:
-            glyphname = None
+            # Windows 7 seems not to support default UVS table
+            if base in subt.cmap:
+                glyphname = subt.cmap[base]
+            else:
+                glyphname = get_glyphname(base)
+
+                add_to_cmap(base, glyphname, sub4, subt)
+                add_blank_glyph(glyphname, hmtx, vmtx, glyf)
+
+                logging.info("added base character: U+{:04X}".format(base))
+                added_count += 1
+
+            add_to_cmap_vs(base, selector, glyphname, sub14)
             logging.info(
                 "added: U+{:04X} U+{:04X} as default".format(base, selector))
         else:
             glyphname = "u{:04X}u{:04X}".format(base, selector)
+
+            add_to_cmap_vs(base, selector, glyphname, sub14)
             add_blank_glyph(glyphname, hmtx, vmtx, glyf)
 
             logging.info(
                 "added: U+{:04X} U+{:04X} as non-default".format(base, selector))
+            added_count += 1
 
-        sub14.uvsDict.setdefault(selector, []).append([base, glyphname])
-        added_count += 1
+    if vs:
+        check_vs(ttf)
 
     logging.info("{} glyphs added!".format(added_count))
     logging.info("saving...")
