@@ -16,7 +16,7 @@ from fontTools.ttLib import TTFont, reorderFontTables
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables
 
 
-version = "2.0"
+version = "2.1"
 
 PY2 = sys.version_info < (3, 0)
 
