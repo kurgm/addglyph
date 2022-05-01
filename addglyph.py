@@ -21,6 +21,9 @@ otTables = cast("Any", otTables_)
 if TYPE_CHECKING:
     from fontTools.ttLib.tables import G_S_U_B_, O_S_2f_2, _h_m_t_x, _v_m_t_x
 
+    CMap = dict[int, str]
+    UVSMap = dict[int, list[tuple[int, Optional[str]]]]
+
 
 version = "2.1"
 
@@ -170,8 +173,8 @@ def get_cmap(ttf: TTFont, vs: bool = False):
         subt.language = 0
         subt.nGroups = 0  # will be recalculated by compiler
         if not hasattr(subt, "cmap"):
-            subt.cmap = {}
-        subt.cmap.update(sub4.cmap)
+            subt.cmap = cast("CMap", {})
+        subt.cmap.update(cast("CMap", sub4.cmap))
         cmap.tables.append(subt)
         logger.info("cmap subtable (format=12) created")
 
@@ -186,8 +189,8 @@ def get_cmap(ttf: TTFont, vs: bool = False):
         sub14.length = 0  # will be recalculated by compiler
         sub14.numVarSelectorRecords = 0  # will be recalculated by compiler
         sub14.language = 0xFF
-        sub14.cmap = {}
-        sub14.uvsDict = {}
+        sub14.cmap = cast("CMap", {})
+        sub14.uvsDict = cast("UVSMap", {})
         cmap.tables.append(sub14)
         logger.info("cmap subtable (format=14) created")
 
@@ -207,14 +210,15 @@ def add_to_cmap(
         sub4: Optional[_c_m_a_p.cmap_format_4],
         subt: _c_m_a_p.cmap_format_12) -> None:
     if codepoint < 0x10000 and sub4 is not None:
-        sub4.cmap.setdefault(codepoint, glyphname)
-    subt.cmap[codepoint] = glyphname
+        cast("CMap", sub4.cmap).setdefault(codepoint, glyphname)
+    cast("CMap", subt.cmap)[codepoint] = glyphname
 
 
 def add_to_cmap_vs(
         base: int, selector: int, glyphname: str,
         sub14: _c_m_a_p.cmap_format_14) -> None:
-    sub14.uvsDict.setdefault(selector, []).append([base, glyphname])
+    cast("UVSMap", sub14.uvsDict).setdefault(selector, []) \
+        .append((base, glyphname))
 
 
 def check_vs(ttf: TTFont) -> None:
@@ -223,6 +227,9 @@ def check_vs(ttf: TTFont) -> None:
 
     _sub4, subt, sub14 = get_cmap(ttf, vs=True)
     assert sub14 is not None  # vs=True
+
+    subt.cmap = cast("CMap", subt.cmap)
+    sub14.uvsDict = cast("UVSMap", sub14.uvsDict)
 
     if 0x20 not in subt.cmap:
         logger.info(
@@ -291,6 +298,8 @@ def addglyph(
 
     sub4, subt, sub14 = get_cmap(ttf, vs=bool(vs))
 
+    subt.cmap = cast("CMap", subt.cmap)
+
     hmtx = cast("_h_m_t_x.table__h_m_t_x", ttf["hmtx"])
     vmtx = cast("_v_m_t_x.table__v_m_t_x", ttf["vmtx"])
     glyf = cast("_g_l_y_f.table__g_l_y_f", ttf["glyf"])
@@ -315,7 +324,9 @@ def addglyph(
     for seq, is_default in vs.items():
         assert sub14 is not None  # sub14 is None => vs == {}
         base, selector = seq
-        if any(uv == base for uv, gname in sub14.uvsDict.get(selector, [])):
+        if any(
+                uv == base for uv, gname in
+                cast("UVSMap", sub14.uvsDict).get(selector, [])):
             logger.info(
                 "already in font: U+{:04X} U+{:04X}".format(base, selector))
             continue
