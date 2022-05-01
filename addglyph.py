@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import argparse
 import logging
 import os
 import re
@@ -15,27 +16,6 @@ hexEntityRe = re.compile(r"&#x([\da-fA-F]+);")
 decEntityRe = re.compile(r"&#(\d+);")
 
 
-def print_help():
-    print("""\
-usage: {prog} -f fontfile [-t textfile]... [-v vsfile]...
-
-addglyph -- version {version}
-Adds blank glyphs to a TrueType or OpenType font file.
-
-Arguments:
-  -f fontfile  specify a font file to add glyphs to.
-  -t textfile  specify text files that contain characters to add.
-  -v vsfile    specify variation sequence data files.
-
-Options:
-  -h, --help   print this message and exit.
-  --version    print the version and exit.
-  -o outfile   specify the a file to write the output to.
-  -q, --quiet  will not write log message to stderr.
-  -b, --batch  will not pause on exit.
-""".format(prog=sys.argv[0], version=version))
-
-
 def decodeEntity(s):
     return hexEntityRe.sub(
         lambda m: chr(int(m.group(1), 16)),
@@ -44,19 +24,6 @@ def decodeEntity(s):
             s
         )
     )
-
-
-def pause():
-    if pause.batch:
-        return
-
-    if os.name == "nt":
-        os.system("pause")
-    else:
-        input("Press Enter to continue . . .")
-
-
-pause.batch = False
 
 
 def get_chars_set(textfiles):
@@ -346,69 +313,86 @@ def addglyph(fontfile, chars, vs={}, outfont=None):
     logging.info("saved successfully: {}".format(outfont))
 
 
+def pause():
+    if pause.batch:
+        return
+
+    if os.name == "nt":
+        os.system("pause")
+    else:
+        input("Press Enter to continue . . .")
+
+
+pause.batch = False
+
+
 def main():
-    fontfile = None
-    textfiles = []
-    vsfiles = []
-    outfont = None
+    argparser = argparse.ArgumentParser(description=(
+        "addglyph -- version {version}\n"
+        "Adds blank glyphs to a TrueType or OpenType font file."
+    ).format(version=version))
 
-    no_arg_types = {"quiet", "batch"}
+    argparser.add_argument(
+        "--quiet", "-q", action="store_true",
+        help="will not write log message to stderr.")
+    argparser.add_argument(
+        "--batch", "-b", action="store_true",
+        help="will not pause on exit.")
 
-    args = iter(sys.argv[1:])
-    for arg in args:
-        if arg[:2] == "--":
-            argtype = arg[2:]
-            if argtype not in no_arg_types:
-                try:
-                    f = next(args)
-                except StopIteration:
-                    raise ValueError(
-                        "arguments for the option '{}' is missing".format(argtype))
-        elif arg[0] == "-":
-            argtype = {
-                "f": "font",
-                "t": "text",
-                "v": "vs",
-                "o": "out",
-                "q": "quiet",
-                "b": "batch",
-            }.get(arg[1], arg[1])
-            if argtype not in no_arg_types:
-                if len(arg) == 2:
-                    try:
-                        f = next(args)
-                    except StopIteration:
-                        raise ValueError(
-                            "arguments for the option '{}' is missing".format(argtype))
-                else:
-                    f = arg[2:]
+    argparser.add_argument("--version", action="version", version=version)
+
+    argparser.add_argument(
+        "-f", metavar="FONTFILE", dest="fontfiles",
+        action="append", default=[],
+        help="specify a font file to add glyphs to.")
+    argparser.add_argument(
+        "-t", metavar="TEXTFILE", dest="textfiles",
+        action="append", default=[],
+        help="specify text files that contain characters to add.")
+    argparser.add_argument(
+        "-v", metavar="VSFILE", dest="vsfiles",
+        action="append", default=[],
+        help="specify variation sequence data files.")
+
+    argparser.add_argument(
+        "other_files", metavar="FILE", nargs="*",
+        help="specify a font file to add glyphs to.")
+
+    argparser.add_argument(
+        "-o", metavar="OUTFILE", dest="outfile",
+        help="specify the a file to write the output to.")
+
+    argset = argparser.parse_intermixed_args()
+
+    if argset.quiet:
+        logging.basicConfig(level=logging.ERROR)
+    else:
+        logging.basicConfig(level=logging.DEBUG)
+
+    if argset.batch:
+        pause.batch = True
+
+    fontfiles = list(argset.fontfiles)
+    textfiles = list(argset.textfiles)
+    vsfiles = list(argset.vsfiles)
+    outfont = argset.outfile
+
+    for other_file in argset.other_files:
+        if other_file[-4:].lower() in (".ttf", ".otf"):
+            fontfiles.append(other_file)
+        elif os.path.basename(other_file)[:2].lower() == "vs":
+            textfiles.append(other_file)
         else:
-            f = arg
-            if arg[-4:].lower() in (".ttf", ".otf"):
-                argtype = "font"
-            elif os.path.basename(arg)[:2].lower() == "vs":
-                argtype = "vs"
-            else:
-                argtype = "text"
+            textfiles.append(other_file)
 
-        if argtype == "font":
-            assert fontfile is None, "multiple font files specified"
-            fontfile = f
-        elif argtype == "text":
-            textfiles.append(f)
-        elif argtype == "vs":
-            vsfiles.append(f)
-        elif argtype == "out":
-            outfont = f
-        elif argtype == "quiet":
-            pass
-        elif argtype == "batch":
-            pass
-        else:
-            raise ValueError("unknown option: {}".format(argtype))
+    if not fontfiles:
+        argparser.error("no font file specified")
+    if len(fontfiles) > 1:
+        argparser.error("multiple font files specified")
+    fontfile = fontfiles[0]
 
-    assert fontfile is not None, "no font file specified"
-    assert textfiles or vsfiles, "no text files or vs files specified"
+    if not textfiles and not vsfiles:
+        argparser.error("no text files or vs files specified")
 
     logging.debug("font file = {}".format(fontfile))
     if textfiles:
@@ -424,30 +408,10 @@ def main():
 
 
 if __name__ == "__main__":
-    args = sys.argv[1:]
-
-    if {"-q", "--quiet"}.intersection(args):
-        logging.basicConfig(level=logging.ERROR)
-    else:
-        logging.basicConfig(level=logging.DEBUG)
-
-    if {"-b", "--batch"}.intersection(args):
-        pause.batch = True
-
-    if {"-h", "--help"}.intersection(args):
-        print_help()
-        pause()
-        sys.exit(0)
-
-    if "--version" in args:
-        print(version)
-        pause()
-        sys.exit(0)
-
     try:
         main()
     except Exception:
         logging.exception("An error occurred")
-        pause()
         sys.exit(1)
-    pause()
+    finally:
+        pause()

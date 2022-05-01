@@ -80,6 +80,8 @@ VSファイルは次のような形式のテキストファイルで、フォン
 
 実行するとコンソールにいろいろ表示されます
 
+▼正常時に表示されるもの（DEBUGかINFOで始まるもの）
+
 「DEBUG:root:font file = なんとか.ttf」…処理対象のフォントファイル
 「DEBUG:root:text file(s) = かん.txt, とか.txt」…処理対象のテキストファイル
 「DEBUG:root:VS file(s) = vsほげほげ.txt」…処理対象のVSファイル
@@ -105,12 +107,14 @@ VSファイルは次のような形式のテキストファイルで、フォン
 「INFO:root:saved successfully: なんとか_new.ttf」…保存先フォント
 「続行するには何かキーを押してください . . .」…何かキーを押すと終了します
 
-以下はエラー時に表示されます
+▼エラー時に表示されるもの
 
-「AssertionError: no font file specified」…フォントファイルが指定されていません
-「AssertionError: multiple font files specified」…複数のフォントファイルが指定されています
-（.otf, .ttf は1つだけ指定してください）
-「AssertionError: no text files or vs files specified」…テキストファイルもVSファイルも指定されていません
+「usage: addglyph.exe 〜〜」の次の行に「addglyph.exe: error: no font file specified」
+　…フォントファイルが指定されていません
+「usage: addglyph.exe 〜〜」の次の行に「addglyph.exe: error: multiple font files specified」
+　…複数のフォントファイルが指定されています（.otf, .ttf は1つだけ指定してください）
+「usage: addglyph.exe 〜〜」の次の行に「addglyph.exe: error: no text files or vs files specified」
+　…テキストファイルもVSファイルも指定されていません
 「ERROR:root:Error while loading text file 'うんぬん.txt'」…テキストファイルの読み込みに失敗しました
 （存在するテキストファイルを指定しているか確認してください）
 「ERROR:root:Error while loading VS text file 'vsかんぬん.txt'」…VSファイルの読み込みに失敗しました
