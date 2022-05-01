@@ -230,7 +230,8 @@ def check_vs(ttf: TTFont) -> None:
 
     if all(codepoint < 0x10000 for codepoint in subt.cmap.keys()):
         logger.info(
-            "at least one non-BMP character should be added for VS to work on Windows 7")
+            "at least one non-BMP character should be added for VS to work "
+            "on Windows 7")
 
     # Don't use Default UVS Table
     for selector, uvList in sub14.uvsDict.items():
@@ -342,7 +343,8 @@ def addglyph(
             add_blank_glyph(glyphname, hmtx, vmtx, glyf)
 
             logger.info(
-                "added: U+{:04X} U+{:04X} as non-default".format(base, selector))
+                "added: U+{:04X} U+{:04X} as non-default".format(
+                    base, selector))
             added_count += 1
 
     if vs:
@@ -358,15 +360,15 @@ def addglyph(
         with TemporaryFile(prefix="add-glyphs") as tmp:
             ttf.save(tmp, reorderTables=False)
 
-            # Bring `glyf` table to the last so that the font can be edited with TTEdit
+            # TTEdit requires `glyf` to be the last table
             logger.info("reordering...")
             tmp.flush()
             tmp.seek(0)
             with open(outfont, "wb") as outfile:
                 reorderFontTables(tmp, outfile, tableOrder=[
-                    "head", "hhea", "maxp", "post", "OS/2", "name", "gasp", "cvt ", "fpgm",
-                    "prep", "cmap", "loca", "hmtx", "mort", "GSUB", "vhea", "vmtx",
-                    "glyf"
+                    "head", "hhea", "maxp", "post", "OS/2", "name", "gasp",
+                    "cvt ", "fpgm", "prep", "cmap", "loca", "hmtx", "mort",
+                    "GSUB", "vhea", "vmtx", "glyf"
                 ])
     except Exception as exc:
         logger.error("Error while saving font file")
