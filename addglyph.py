@@ -13,6 +13,10 @@ from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables
 
 version = "2.1"
 
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+
 hexEntityRe = re.compile(r"&#x([\da-fA-F]+);")
 decEntityRe = re.compile(r"&#(\d+);")
 
@@ -35,7 +39,7 @@ def get_chars_set(textfiles: Sequence[str]) -> Set[str]:
             with open(f, encoding="utf-8-sig") as infile:
                 dat = decodeEntity(infile.read())
         except Exception:
-            logging.error("Error while loading text file '{}'".format(f))
+            logger.error("Error while loading text file '{}'".format(f))
             raise
         chars.update(dat)
 
@@ -87,12 +91,12 @@ def get_vs_dict(vsfiles: Sequence[str]) -> Dict[Tuple[int, int], bool]:
                             continue
                         seq, is_default = dat
                     except SyntaxError:
-                        logging.error(
+                        logger.error(
                             "Error while parsing VS text file line {}".format(lineno + 1))
                         raise
                     vs[seq] = is_default
         except Exception:
-            logging.error("Error while loading VS text file '{}'".format(f))
+            logger.error("Error while loading VS text file '{}'".format(f))
             raise
 
     return vs
@@ -124,7 +128,7 @@ def get_cmap(ttf: TTFont, vs: bool = False):
             subt.cmap = {}
         subt.cmap.update(sub4.cmap)
         cmap.tables.append(subt)
-        logging.info("cmap subtable (format=12) created")
+        logger.info("cmap subtable (format=12) created")
 
     sub14 = cmap.getcmap(platformID=0, platEncID=5)
     if vs and sub14 is None:
@@ -138,7 +142,7 @@ def get_cmap(ttf: TTFont, vs: bool = False):
         sub14.cmap = {}
         sub14.uvsDict = {}
         cmap.tables.append(sub14)
-        logging.info("cmap subtable (format=14) created")
+        logger.info("cmap subtable (format=14) created")
 
     return sub4, subt, sub14
 
@@ -168,11 +172,11 @@ def check_vs(ttf: TTFont):
     _sub4, subt, sub14 = get_cmap(ttf, vs=True)
 
     if 0x20 not in subt.cmap:
-        logging.info(
+        logger.info(
             "U+0020 should be added for VS to work on Windows 7")
 
     if all(codepoint < 0x10000 for codepoint in subt.cmap.keys()):
-        logging.info(
+        logger.info(
             "at least one non-BMP character should be added for VS to work on Windows 7")
 
     # Don't use Default UVS Table
@@ -228,7 +232,7 @@ def addglyph(
             recalcBBoxes=False  # Adding blank glyphs will not change bboxes
         )
     except Exception:
-        logging.error("Error while loading font file")
+        logger.error("Error while loading font file")
         raise
 
     sub4, subt, sub14 = get_cmap(ttf, vs=bool(vs))
@@ -243,7 +247,7 @@ def addglyph(
     for char in chars:
         codepoint = ord(char)
         if codepoint in subt.cmap:
-            logging.info("already in font: U+{:04X}".format(codepoint))
+            logger.info("already in font: U+{:04X}".format(codepoint))
             continue
 
         glyphname = get_glyphname(codepoint)
@@ -251,13 +255,13 @@ def addglyph(
         add_to_cmap(codepoint, glyphname, sub4, subt)
         add_blank_glyph(glyphname, hmtx, vmtx, glyf)
 
-        logging.info("added: U+{:04X}".format(codepoint))
+        logger.info("added: U+{:04X}".format(codepoint))
         added_count += 1
 
     for seq, is_default in vs.items():
         base, selector = seq
         if any(uv == base for uv, gname in sub14.uvsDict.get(selector, [])):
-            logging.info(
+            logger.info(
                 "already in font: U+{:04X} U+{:04X}".format(base, selector))
             continue
 
@@ -271,11 +275,11 @@ def addglyph(
                 add_to_cmap(base, glyphname, sub4, subt)
                 add_blank_glyph(glyphname, hmtx, vmtx, glyf)
 
-                logging.info("added base character: U+{:04X}".format(base))
+                logger.info("added base character: U+{:04X}".format(base))
                 added_count += 1
 
             add_to_cmap_vs(base, selector, glyphname, sub14)
-            logging.info(
+            logger.info(
                 "added: U+{:04X} U+{:04X} as default".format(base, selector))
         else:
             glyphname = "u{:04X}u{:04X}".format(base, selector)
@@ -283,15 +287,15 @@ def addglyph(
             add_to_cmap_vs(base, selector, glyphname, sub14)
             add_blank_glyph(glyphname, hmtx, vmtx, glyf)
 
-            logging.info(
+            logger.info(
                 "added: U+{:04X} U+{:04X} as non-default".format(base, selector))
             added_count += 1
 
     if vs:
         check_vs(ttf)
 
-    logging.info("{} glyphs added!".format(added_count))
-    logging.info("saving...")
+    logger.info("{} glyphs added!".format(added_count))
+    logger.info("saving...")
 
     if outfont is None:
         outfont = fontfile[:-4] + "_new" + fontfile[-4:]
@@ -301,7 +305,7 @@ def addglyph(
             ttf.save(tmp, reorderTables=False)
 
             # Bring `glyf` table to the last so that the font can be edited with TTEdit
-            logging.info("reordering...")
+            logger.info("reordering...")
             tmp.flush()
             tmp.seek(0)
             with open(outfont, "wb") as outfile:
@@ -311,10 +315,10 @@ def addglyph(
                     "glyf"
                 ])
     except Exception:
-        logging.error("Error while saving font file")
+        logger.error("Error while saving font file")
         raise
 
-    logging.info("saved successfully: {}".format(outfont))
+    logger.info("saved successfully: {}".format(outfont))
 
 
 def pause() -> None:
@@ -370,8 +374,6 @@ def main() -> None:
 
     if argset.quiet:
         logging.basicConfig(level=logging.ERROR)
-    else:
-        logging.basicConfig(level=logging.DEBUG)
 
     if argset.batch:
         pause.batch = True
@@ -398,13 +400,13 @@ def main() -> None:
     if not textfiles and not vsfiles:
         argparser.error("no text files or vs files specified")
 
-    logging.debug("font file = {}".format(fontfile))
+    logger.debug("font file = {}".format(fontfile))
     if textfiles:
-        logging.debug("text file(s) = {}".format(", ".join(textfiles)))
+        logger.debug("text file(s) = {}".format(", ".join(textfiles)))
     if vsfiles:
-        logging.debug("VS file(s) = {}".format(", ".join(vsfiles)))
+        logger.debug("VS file(s) = {}".format(", ".join(vsfiles)))
     if outfont is not None:
-        logging.debug("out = {}".format(outfont))
+        logger.debug("out = {}".format(outfont))
 
     chars = get_chars_set(textfiles)
     vs = get_vs_dict(vsfiles)
@@ -415,7 +417,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception:
-        logging.exception("An error occurred")
+        logger.exception("An error occurred")
         sys.exit(1)
     finally:
         pause()
