@@ -321,12 +321,16 @@ def addglyph(
         logger.info("added: U+{:04X}".format(codepoint))
         added_count += 1
 
+    vs_in_font: set[tuple[int, int]] = set()
+    if sub14 is not None and vs:
+        for selector, uvList in cast("UVSMap", sub14.uvsDict).items():
+            vs_in_font.update((uv, selector) for uv, gname in uvList)
+
     for seq, is_default in vs.items():
         assert sub14 is not None  # sub14 is None => vs == {}
         base, selector = seq
-        if any(
-                uv == base for uv, gname in
-                cast("UVSMap", sub14.uvsDict).get(selector, [])):
+
+        if seq in vs_in_font:
             logger.info(
                 "already in font: U+{:04X} U+{:04X}".format(base, selector))
             continue
@@ -357,6 +361,8 @@ def addglyph(
                 "added: U+{:04X} U+{:04X} as non-default".format(
                     base, selector))
             added_count += 1
+
+        vs_in_font.add(seq)
 
     if vs:
         check_vs(ttf)
