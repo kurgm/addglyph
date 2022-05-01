@@ -9,10 +9,13 @@ import os
 import re
 import sys
 from tempfile import TemporaryFile
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from fontTools.ttLib import TTFont, reorderFontTables
-from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables
+from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables as otTables_
+
+
+otTables = cast("Any", otTables_)
 
 
 if TYPE_CHECKING:
@@ -159,8 +162,8 @@ def get_cmap(ttf: TTFont, vs: bool = False):
         assert sub4 is not None, "cmap subtable (format=4) not found"
         subt = cast(
             "_c_m_a_p.cmap_format_12", _c_m_a_p.CmapSubtable.newSubtable(12))
-        subt.platformID = 3
-        subt.platEncID = 10
+        subt.platformID = 3  # type: ignore
+        subt.platEncID = 1  # type: ignore
         subt.format = 12
         subt.reserved = 0
         subt.length = 0   # will be recalculated by compiler
@@ -177,8 +180,8 @@ def get_cmap(ttf: TTFont, vs: bool = False):
     if vs and sub14 is None:
         sub14 = cast(
             "_c_m_a_p.cmap_format_14", _c_m_a_p.CmapSubtable.newSubtable(14))
-        sub14.platformID = 0
-        sub14.platEncID = 5
+        sub14.platformID = 0  # type: ignore
+        sub14.platEncID = 5  # type: ignore
         sub14.format = 14
         sub14.length = 0  # will be recalculated by compiler
         sub14.numVarSelectorRecords = 0  # will be recalculated by compiler
