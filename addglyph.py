@@ -1,15 +1,22 @@
 #!/usr/bin/env python
+from __future__ import annotations
+
 import argparse
+from collections.abc import Iterable, Sequence
 import contextlib
 import logging
 import os
 import re
 import sys
 from tempfile import TemporaryFile
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, cast
+from typing import TYPE_CHECKING, Optional, cast
 
 from fontTools.ttLib import TTFont, reorderFontTables
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables
+
+
+if TYPE_CHECKING:
+    from fontTools.ttLib.tables import G_S_U_B_, O_S_2f_2, _h_m_t_x, _v_m_t_x
 
 
 version = "2.1"
@@ -66,8 +73,8 @@ def open_text(path: str, *args, err_hint: str = "", **kwargs):
             raise
 
 
-def get_chars_set(textfiles: Sequence[str]) -> Set[str]:
-    chars: Set[str] = set()
+def get_chars_set(textfiles: Sequence[str]) -> set[str]:
+    chars: set[str] = set()
 
     for f in textfiles:
         with open_text(f, err_hint="text file") as file:
@@ -78,7 +85,7 @@ def get_chars_set(textfiles: Sequence[str]) -> Set[str]:
     return chars
 
 
-def parse_vs_line(line: str) -> Optional[Tuple[Tuple[int, int], bool]]:
+def parse_vs_line(line: str) -> Optional[tuple[tuple[int, int], bool]]:
     row = [decode_entity(col) for col in line.split()]
     if not row:
         # empty line
@@ -110,8 +117,8 @@ def parse_vs_line(line: str) -> Optional[Tuple[Tuple[int, int], bool]]:
     return seq, is_default
 
 
-def get_vs_dict(vsfiles: Sequence[str]) -> Dict[Tuple[int, int], bool]:
-    vs: Dict[Tuple[int, int], bool] = {}
+def get_vs_dict(vsfiles: Sequence[str]) -> dict[tuple[int, int], bool]:
+    vs: dict[tuple[int, int], bool] = {}
 
     for f in vsfiles:
         with open_text(f, err_hint="VS text file") as file:
@@ -131,7 +138,10 @@ def get_vs_dict(vsfiles: Sequence[str]) -> Dict[Tuple[int, int], bool]:
     return vs
 
 
-def add_blank_glyph(glyphname: str, hmtx, vmtx, glyf) -> None:
+def add_blank_glyph(
+        glyphname: str,
+        hmtx: _h_m_t_x.table__h_m_t_x, vmtx: _v_m_t_x.table__v_m_t_x,
+        glyf: _g_l_y_f.table__g_l_y_f) -> None:
     hmtx[glyphname] = vmtx[glyphname] = (1024, 0)
 
     glyph = _g_l_y_f.Glyph()
@@ -140,12 +150,15 @@ def add_blank_glyph(glyphname: str, hmtx, vmtx, glyf) -> None:
 
 
 def get_cmap(ttf: TTFont, vs: bool = False):
-    cmap = ttf["cmap"]
-    sub4 = cmap.getcmap(platformID=3, platEncID=1)
-    subt = cmap.getcmap(platformID=3, platEncID=10)
+    cmap = cast("_c_m_a_p.table__c_m_a_p", ttf["cmap"])
+    sub4: Optional[_c_m_a_p.cmap_format_4] = \
+        cmap.getcmap(platformID=3, platEncID=1)
+    subt: Optional[_c_m_a_p.cmap_format_12] = \
+        cmap.getcmap(platformID=3, platEncID=10)
     if subt is None:
         assert sub4 is not None, "cmap subtable (format=4) not found"
-        subt = _c_m_a_p.CmapSubtable.newSubtable(12)
+        subt = cast(
+            "_c_m_a_p.cmap_format_12", _c_m_a_p.CmapSubtable.newSubtable(12))
         subt.platformID = 3
         subt.platEncID = 10
         subt.format = 12
@@ -159,9 +172,11 @@ def get_cmap(ttf: TTFont, vs: bool = False):
         cmap.tables.append(subt)
         logger.info("cmap subtable (format=12) created")
 
-    sub14 = cmap.getcmap(platformID=0, platEncID=5)
+    sub14: Optional[_c_m_a_p.cmap_format_14] = \
+        cmap.getcmap(platformID=0, platEncID=5)
     if vs and sub14 is None:
-        sub14 = _c_m_a_p.CmapSubtable.newSubtable(14)
+        sub14 = cast(
+            "_c_m_a_p.cmap_format_14", _c_m_a_p.CmapSubtable.newSubtable(14))
         sub14.platformID = 0
         sub14.platEncID = 5
         sub14.format = 14
@@ -184,21 +199,27 @@ def get_glyphname(codepoint: int) -> str:
     return glyphname
 
 
-def add_to_cmap(codepoint: int, glyphname: str, sub4, subt) -> None:
+def add_to_cmap(
+        codepoint: int, glyphname: str,
+        sub4: Optional[_c_m_a_p.cmap_format_4],
+        subt: _c_m_a_p.cmap_format_12) -> None:
     if codepoint < 0x10000 and sub4 is not None:
         sub4.cmap.setdefault(codepoint, glyphname)
     subt.cmap[codepoint] = glyphname
 
 
-def add_to_cmap_vs(base: int, selector: int, glyphname: str, sub14) -> None:
+def add_to_cmap_vs(
+        base: int, selector: int, glyphname: str,
+        sub14: _c_m_a_p.cmap_format_14) -> None:
     sub14.uvsDict.setdefault(selector, []).append([base, glyphname])
 
 
-def check_vs(ttf: TTFont):
+def check_vs(ttf: TTFont) -> None:
     # Check for VS font requirements on Windows 7
     # Reference: http://glyphwiki.org/wiki/User:emk
 
     _sub4, subt, sub14 = get_cmap(ttf, vs=True)
+    assert sub14 is not None  # vs=True
 
     if 0x20 not in subt.cmap:
         logger.info(
@@ -222,10 +243,10 @@ def check_vs(ttf: TTFont):
             sub14.uvsDict[selector] = newUvList
 
     # set 57th bit of ulUnicodeRange in OS/2 table
-    os2 = ttf["OS/2"]
+    os2 = cast("O_S_2f_2.table_O_S_2f_2", ttf["OS/2"])
     os2.ulUnicodeRange2 |= 1 << (57 - 32)
 
-    gsub = ttf["GSUB"]
+    gsub = cast("G_S_U_B_.table_G_S_U_B_", ttf["GSUB"])
     records = gsub.table.ScriptList.ScriptRecord
     if not any(record.ScriptTag == "hani" for record in records):
         # pylint: disable=E1101
@@ -253,7 +274,7 @@ def check_vs(ttf: TTFont):
 
 def addglyph(
         fontfile: str, chars: Iterable[str],
-        vs: Dict[Tuple[int, int], bool] = {},
+        vs: dict[tuple[int, int], bool] = {},
         outfont: Optional[str] = None) -> None:
     try:
         ttf = TTFont(
@@ -266,9 +287,9 @@ def addglyph(
 
     sub4, subt, sub14 = get_cmap(ttf, vs=bool(vs))
 
-    hmtx = ttf["hmtx"]
-    vmtx = ttf["vmtx"]
-    glyf = ttf["glyf"]
+    hmtx = cast("_h_m_t_x.table__h_m_t_x", ttf["hmtx"])
+    vmtx = cast("_v_m_t_x.table__v_m_t_x", ttf["vmtx"])
+    glyf = cast("_g_l_y_f.table__g_l_y_f", ttf["glyf"])
     glyf.padding = 4
 
     added_count = 0
@@ -288,6 +309,7 @@ def addglyph(
         added_count += 1
 
     for seq, is_default in vs.items():
+        assert sub14 is not None  # sub14 is None => vs == {}
         base, selector = seq
         if any(uv == base for uv, gname in sub14.uvsDict.get(selector, [])):
             logger.info(
@@ -407,12 +429,12 @@ def main() -> None:
     if argset.batch:
         pause.batch = True
 
-    fontfiles: List[str] = list(argset.fontfiles)
-    textfiles: List[str] = list(argset.textfiles)
-    vsfiles: List[str] = list(argset.vsfiles)
+    fontfiles: list[str] = list(argset.fontfiles)
+    textfiles: list[str] = list(argset.textfiles)
+    vsfiles: list[str] = list(argset.vsfiles)
     outfont: Optional[str] = argset.outfile
 
-    for other_file in cast(List[str], argset.other_files):
+    for other_file in cast("list[str]", argset.other_files):
         if other_file[-4:].lower() in (".ttf", ".otf"):
             fontfiles.append(other_file)
         elif os.path.basename(other_file)[:2].lower() == "vs":
