@@ -1,11 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
-import codecs
 import logging
 import os
 import re
@@ -18,36 +11,8 @@ from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables
 
 version = "2.1"
 
-PY2 = sys.version_info < (3, 0)
-
 hexEntityRe = re.compile(r"&#x([\da-fA-F]+);")
 decEntityRe = re.compile(r"&#(\d+);")
-
-
-if not PY2:
-    unichr = chr
-    raw_input = input
-
-if sys.maxunicode == 0xFFFF:
-    def myunichr(cp):
-        if cp <= 0xFFFF:
-            return unichr(cp)
-        return "\\U{:08x}".format(cp).decode("unicode_escape")
-
-    def iterstr(s):
-        return codecs.iterdecode(s.encode("utf-16_be"), encoding="utf-16_be")
-
-    def myord(s):
-        if len(s) == 1:
-            return ord(s)
-        assert len(s) == 2 and "\uD800" <= s[0] < "\uDC00", \
-            "Invalid UTF-16 character"
-        return int(s.encode("utf-32_be").encode("hex_codec"), 16)
-
-else:
-    myunichr = unichr
-    iterstr = iter
-    myord = ord
 
 
 def print_help():
@@ -73,9 +38,9 @@ Options:
 
 def decodeEntity(s):
     return hexEntityRe.sub(
-        lambda m: myunichr(int(m.group(1), 16)),
+        lambda m: chr(int(m.group(1), 16)),
         decEntityRe.sub(
-            lambda m: myunichr(int(m.group(1), 10)),
+            lambda m: chr(int(m.group(1), 10)),
             s
         )
     )
@@ -88,7 +53,7 @@ def pause():
     if os.name == "nt":
         os.system("pause")
     else:
-        raw_input("Press Enter to continue . . .")
+        input("Press Enter to continue . . .")
 
 
 pause.batch = False
@@ -99,12 +64,12 @@ def get_chars_set(textfiles):
 
     for f in textfiles:
         try:
-            with codecs.open(f, encoding="utf-8-sig") as infile:
+            with open(f, encoding="utf-8-sig") as infile:
                 dat = decodeEntity(infile.read())
         except Exception:
             logging.error("Error while loading text file '{}'".format(f))
             raise
-        chars.update(iterstr(dat))
+        chars.update(dat)
 
     chars -= {"\t", "\r", "\n"}
     return chars
@@ -124,7 +89,7 @@ def parse_vs_line(line):
         seq_str = row[0]
         is_default_str = ""
 
-    seq = tuple([myord(c) for c in iterstr(seq_str)])
+    seq = tuple([ord(c) for c in seq_str])
     if len(seq) != 2:
         raise SyntaxError(
             "invalid variation sequence length: {}".format(len(seq)))
@@ -145,7 +110,7 @@ def get_vs_dict(vsfiles):
 
     for f in vsfiles:
         try:
-            with codecs.open(f, encoding="utf-8-sig") as infile:
+            with open(f, encoding="utf-8-sig") as infile:
                 for lineno, line in enumerate(infile):
                     try:
                         dat = parse_vs_line(line)
@@ -305,7 +270,7 @@ def addglyph(fontfile, chars, vs={}, outfont=None):
     added_count = 0
 
     for char in chars:
-        codepoint = myord(char)
+        codepoint = ord(char)
         if codepoint in subt.cmap:
             logging.info("already in font: U+{:04X}".format(codepoint))
             continue
