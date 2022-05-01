@@ -41,18 +41,14 @@ class VSFileSyntaxError(Exception):
             message=super().__str__())
 
 
-hexEntityRe = re.compile(r"&#x([\da-fA-F]+);")
-decEntityRe = re.compile(r"&#(\d+);")
+entity_re = re.compile(r"&#(?:x([0-9a-f]+)|([0-9]+));", re.IGNORECASE)
 
 
-def decodeEntity(s: str) -> str:
-    return hexEntityRe.sub(
-        lambda m: chr(int(m.group(1), 16)),
-        decEntityRe.sub(
-            lambda m: chr(int(m.group(1), 10)),
-            s
-        )
-    )
+def decode_entity(s: str) -> str:
+    return entity_re.sub(lambda m: (
+        chr(int(m.group(1), 16)) if m.group(1) else
+        chr(int(m.group(2), 10))
+    ), s)
 
 
 @contextlib.contextmanager
@@ -76,14 +72,14 @@ def get_chars_set(textfiles: Sequence[str]) -> Set[str]:
     for f in textfiles:
         with open_text(f, err_hint="text file") as file:
             for line in file:
-                chars.update(decodeEntity(line))
+                chars.update(decode_entity(line))
 
     chars -= {"\t", "\r", "\n"}
     return chars
 
 
 def parse_vs_line(line: str) -> Optional[Tuple[Tuple[int, int], bool]]:
-    row = [decodeEntity(col) for col in line.split()]
+    row = [decode_entity(col) for col in line.split()]
     if not row:
         # empty line
         return None
