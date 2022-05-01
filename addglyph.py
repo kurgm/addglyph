@@ -5,6 +5,7 @@ import os
 import re
 import sys
 from tempfile import TemporaryFile
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, cast
 
 from fontTools.ttLib import TTFont, reorderFontTables
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables
@@ -16,7 +17,7 @@ hexEntityRe = re.compile(r"&#x([\da-fA-F]+);")
 decEntityRe = re.compile(r"&#(\d+);")
 
 
-def decodeEntity(s):
+def decodeEntity(s: str) -> str:
     return hexEntityRe.sub(
         lambda m: chr(int(m.group(1), 16)),
         decEntityRe.sub(
@@ -26,8 +27,8 @@ def decodeEntity(s):
     )
 
 
-def get_chars_set(textfiles):
-    chars = set()
+def get_chars_set(textfiles: Sequence[str]) -> Set[str]:
+    chars: Set[str] = set()
 
     for f in textfiles:
         try:
@@ -42,7 +43,7 @@ def get_chars_set(textfiles):
     return chars
 
 
-def parse_vs_line(line):
+def parse_vs_line(line: str) -> Optional[Tuple[Tuple[int, int], bool]]:
     row = [decodeEntity(col) for col in line.split()]
     if not row:
         # empty line
@@ -72,8 +73,8 @@ def parse_vs_line(line):
     return seq, is_default
 
 
-def get_vs_dict(vsfiles):
-    vs = {}
+def get_vs_dict(vsfiles: Sequence[str]) -> Dict[Tuple[int, int], bool]:
+    vs: Dict[Tuple[int, int], bool] = {}
 
     for f in vsfiles:
         try:
@@ -97,7 +98,7 @@ def get_vs_dict(vsfiles):
     return vs
 
 
-def add_blank_glyph(glyphname, hmtx, vmtx, glyf):
+def add_blank_glyph(glyphname: str, hmtx, vmtx, glyf) -> None:
     hmtx[glyphname] = vmtx[glyphname] = (1024, 0)
 
     glyph = _g_l_y_f.Glyph()
@@ -105,7 +106,7 @@ def add_blank_glyph(glyphname, hmtx, vmtx, glyf):
     glyf[glyphname] = glyph
 
 
-def get_cmap(ttf, vs=False):
+def get_cmap(ttf: TTFont, vs: bool = False):
     cmap = ttf["cmap"]
     sub4 = cmap.getcmap(platformID=3, platEncID=1)
     subt = cmap.getcmap(platformID=3, platEncID=10)
@@ -142,7 +143,7 @@ def get_cmap(ttf, vs=False):
     return sub4, subt, sub14
 
 
-def get_glyphname(codepoint):
+def get_glyphname(codepoint: int) -> str:
     if codepoint < 0x10000:
         glyphname = "uni{:04X}".format(codepoint)
     else:
@@ -150,17 +151,17 @@ def get_glyphname(codepoint):
     return glyphname
 
 
-def add_to_cmap(codepoint, glyphname, sub4, subt):
+def add_to_cmap(codepoint: int, glyphname: str, sub4, subt) -> None:
     if codepoint < 0x10000 and sub4 is not None:
         sub4.cmap.setdefault(codepoint, glyphname)
     subt.cmap[codepoint] = glyphname
 
 
-def add_to_cmap_vs(base, selector, glyphname, sub14):
+def add_to_cmap_vs(base: int, selector: int, glyphname: str, sub14) -> None:
     sub14.uvsDict.setdefault(selector, []).append([base, glyphname])
 
 
-def check_vs(ttf):
+def check_vs(ttf: TTFont):
     # Check for VS font requirements on Windows 7
     # Reference: http://glyphwiki.org/wiki/User:emk
 
@@ -217,7 +218,10 @@ def check_vs(ttf):
         # pylint: enable=E1101
 
 
-def addglyph(fontfile, chars, vs={}, outfont=None):
+def addglyph(
+        fontfile: str, chars: Iterable[str],
+        vs: Dict[Tuple[int, int], bool] = {},
+        outfont: Optional[str] = None) -> None:
     try:
         ttf = TTFont(
             fontfile,
@@ -313,7 +317,7 @@ def addglyph(fontfile, chars, vs={}, outfont=None):
     logging.info("saved successfully: {}".format(outfont))
 
 
-def pause():
+def pause() -> None:
     if pause.batch:
         return
 
@@ -326,7 +330,7 @@ def pause():
 pause.batch = False
 
 
-def main():
+def main() -> None:
     argparser = argparse.ArgumentParser(description=(
         "addglyph -- version {version}\n"
         "Adds blank glyphs to a TrueType or OpenType font file."
@@ -372,12 +376,12 @@ def main():
     if argset.batch:
         pause.batch = True
 
-    fontfiles = list(argset.fontfiles)
-    textfiles = list(argset.textfiles)
-    vsfiles = list(argset.vsfiles)
-    outfont = argset.outfile
+    fontfiles: List[str] = list(argset.fontfiles)
+    textfiles: List[str] = list(argset.textfiles)
+    vsfiles: List[str] = list(argset.vsfiles)
+    outfont: Optional[str] = argset.outfile
 
-    for other_file in argset.other_files:
+    for other_file in cast(List[str], argset.other_files):
         if other_file[-4:].lower() in (".ttf", ".otf"):
             fontfiles.append(other_file)
         elif os.path.basename(other_file)[:2].lower() == "vs":
