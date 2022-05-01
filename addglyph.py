@@ -362,14 +362,17 @@ def addglyph(
 
             # TTEdit requires `glyf` to be the last table
             logger.info("reordering...")
+            tableOrder = ttf.keys()
+            if "GlyphOrder" in tableOrder:
+                tableOrder.remove("GlyphOrder")
+            if "glyf" in tableOrder:
+                tableOrder.remove("glyf")
+                tableOrder.append("glyf")
+
             tmp.flush()
             tmp.seek(0)
             with open(outfont, "wb") as outfile:
-                reorderFontTables(tmp, outfile, tableOrder=[
-                    "head", "hhea", "maxp", "post", "OS/2", "name", "gasp",
-                    "cvt ", "fpgm", "prep", "cmap", "loca", "hmtx", "mort",
-                    "GSUB", "vhea", "vmtx", "glyf"
-                ])
+                reorderFontTables(tmp, outfile, tableOrder=tableOrder)
     except Exception as exc:
         logger.error("Error while saving font file")
         raise AddGlyphUserError() from exc
