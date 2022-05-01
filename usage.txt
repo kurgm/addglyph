@@ -118,14 +118,16 @@ VSファイルは次のような形式のテキストファイルで、フォン
 「ERROR:__main__:Error while loading text file 'うんぬん.txt'」…テキストファイルの読み込みに失敗しました
 （存在するテキストファイルを指定しているか確認してください）
 「ERROR:__main__:Error while loading VS text file 'vsかんぬん.txt'」…VSファイルの読み込みに失敗しました
-「ERROR:__main__:Error while parsing VS text file line ##」…VSファイルの##行目の解析に失敗しました
-　「SyntaxError: invalid number of columns: ##」…その行を空白で区切ると3つ以上ある
-　「SyntaxError: invalid variation sequence length: ##」…1列目が「基底文字+字形選択子」になっていない
-　「SyntaxError: invalid default variation sequence option」…2列目が「D」でない
+「VSFileSyntaxError: file 'vsなんとか.txt', line #: [エラーの内容]」…VSファイルの#行目の解析に失敗しました
+　「invalid number of columns: ##」…その行を空白で区切ると3つ以上ある
+　「invalid variation sequence length: ##」…1列目が「基底文字+字形選択子」になっていない
+　「invalid default variation sequence option」…2列目が「D」でない
 「ERROR:__main__:Error while loading font file」…フォントファイルの読み込みに失敗しました
 （存在する壊れていないフォントファイルを指定しているか確認してください）
 「ERROR:__main__:Error while saving font file」…フォントファイルの書き込みに失敗しました
 （書き込みの権限があるか、ディスクに空き容量があるか、ファイルが使用中でないか確認して下さい）
+「ERROR:__main__:An unexpected error occurred!」「ERROR:__main__:(please report this to @kurgm)」
+　…想定外のエラーが発生しました（エラーログとともに @kurgm にご報告ください）
 
 ※一瞬で消えて表示が見えない時はコマンド プロンプトなどから実行してください
 　そして @kurgm まで報告していただけると助かります

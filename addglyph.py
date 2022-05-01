@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import contextlib
 import logging
 import os
 import re
@@ -17,6 +18,29 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
+class AddGlyphUserError(Exception):
+    pass
+
+
+class VSFileSyntaxError(Exception):
+    def __init__(
+            self, *args,
+            filename: Optional[str] = None,
+            lineno: Optional[int] = None,
+            **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.filename = filename
+        self.lineno = lineno
+
+    def __str__(self) -> str:
+        if self.filename is None or self.lineno is None:
+            return super().__str__()
+
+        return "file {filename!r}, line {lineno}: {message}".format(
+            filename=self.filename, lineno=self.lineno,
+            message=super().__str__())
+
+
 hexEntityRe = re.compile(r"&#x([\da-fA-F]+);")
 decEntityRe = re.compile(r"&#(\d+);")
 
@@ -31,17 +55,28 @@ def decodeEntity(s: str) -> str:
     )
 
 
+@contextlib.contextmanager
+def open_text(path: str, *args, err_hint: str = "", **kwargs):
+    try:
+        with open(path, *args, encoding="utf-8-sig", **kwargs) as file:
+            yield file
+    except Exception as exc:
+        logger.error("Error while loading {err_hint}{path!r}".format(
+            err_hint=err_hint + " " if err_hint else "",
+            path=path))
+        if isinstance(exc, (OSError, UnicodeError, VSFileSyntaxError)):
+            raise AddGlyphUserError() from exc
+        else:
+            raise
+
+
 def get_chars_set(textfiles: Sequence[str]) -> Set[str]:
     chars: Set[str] = set()
 
     for f in textfiles:
-        try:
-            with open(f, encoding="utf-8-sig") as infile:
-                dat = decodeEntity(infile.read())
-        except Exception:
-            logger.error("Error while loading text file '{}'".format(f))
-            raise
-        chars.update(dat)
+        with open_text(f, err_hint="text file") as file:
+            for line in file:
+                chars.update(decodeEntity(line))
 
     chars -= {"\t", "\r", "\n"}
     return chars
@@ -54,7 +89,8 @@ def parse_vs_line(line: str) -> Optional[Tuple[Tuple[int, int], bool]]:
         return None
 
     if len(row) > 2:
-        raise SyntaxError("invalid number of columns: {}".format(len(row)))
+        raise VSFileSyntaxError(
+            "invalid number of columns: {}".format(len(row)))
     elif len(row) == 2:
         seq_str, is_default_str = row
     else:
@@ -63,7 +99,7 @@ def parse_vs_line(line: str) -> Optional[Tuple[Tuple[int, int], bool]]:
 
     seq = tuple([ord(c) for c in seq_str])
     if len(seq) != 2:
-        raise SyntaxError(
+        raise VSFileSyntaxError(
             "invalid variation sequence length: {}".format(len(seq)))
 
     if is_default_str == "D":
@@ -71,8 +107,9 @@ def parse_vs_line(line: str) -> Optional[Tuple[Tuple[int, int], bool]]:
     elif is_default_str == "":
         is_default = False
     else:
-        raise SyntaxError(
-            "invalid default variation sequence option: {}".format(is_default_str))
+        raise VSFileSyntaxError(
+            "invalid default variation sequence option: {}".format(
+                is_default_str))
 
     return seq, is_default
 
@@ -81,23 +118,19 @@ def get_vs_dict(vsfiles: Sequence[str]) -> Dict[Tuple[int, int], bool]:
     vs: Dict[Tuple[int, int], bool] = {}
 
     for f in vsfiles:
-        try:
-            with open(f, encoding="utf-8-sig") as infile:
-                for lineno, line in enumerate(infile):
-                    try:
-                        dat = parse_vs_line(line)
-                        if dat is None:
-                            # empty line
-                            continue
-                        seq, is_default = dat
-                    except SyntaxError:
-                        logger.error(
-                            "Error while parsing VS text file line {}".format(lineno + 1))
-                        raise
-                    vs[seq] = is_default
-        except Exception:
-            logger.error("Error while loading VS text file '{}'".format(f))
-            raise
+        with open_text(f, err_hint="VS text file") as file:
+            for lineno, line in enumerate(file):
+                try:
+                    dat = parse_vs_line(line)
+                except VSFileSyntaxError as exc:
+                    exc.lineno = lineno + 1
+                    exc.filename = f
+                    raise
+                if dat is None:
+                    # empty line
+                    continue
+                seq, is_default = dat
+                vs[seq] = is_default
 
     return vs
 
@@ -231,9 +264,9 @@ def addglyph(
             fontfile,
             recalcBBoxes=False  # Adding blank glyphs will not change bboxes
         )
-    except Exception:
+    except Exception as exc:
         logger.error("Error while loading font file")
-        raise
+        raise AddGlyphUserError() from exc
 
     sub4, subt, sub14 = get_cmap(ttf, vs=bool(vs))
 
@@ -314,9 +347,9 @@ def addglyph(
                     "prep", "cmap", "loca", "hmtx", "mort", "GSUB", "vhea", "vmtx",
                     "glyf"
                 ])
-    except Exception:
+    except Exception as exc:
         logger.error("Error while saving font file")
-        raise
+        raise AddGlyphUserError() from exc
 
     logger.info("saved successfully: {}".format(outfont))
 
@@ -387,7 +420,7 @@ def main() -> None:
         if other_file[-4:].lower() in (".ttf", ".otf"):
             fontfiles.append(other_file)
         elif os.path.basename(other_file)[:2].lower() == "vs":
-            textfiles.append(other_file)
+            vsfiles.append(other_file)
         else:
             textfiles.append(other_file)
 
@@ -416,8 +449,12 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
+    except AddGlyphUserError as exc:
+        logger.exception("An error occurred", exc_info=exc.__cause__)
+        sys.exit(2)
     except Exception:
-        logger.exception("An error occurred")
+        logger.exception("An unexpected error occurred!")
+        logger.error("(please report this to @kurgm)")
         sys.exit(1)
     finally:
         pause()
