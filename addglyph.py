@@ -8,10 +8,9 @@ import logging
 import os
 import re
 import sys
-from tempfile import TemporaryFile
 from typing import TYPE_CHECKING, Any, Optional, cast
 
-from fontTools.ttLib import TTFont, reorderFontTables
+from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables as otTables_
 
 
@@ -374,22 +373,7 @@ def addglyph(
         outfont = fontfile[:-4] + "_new" + fontfile[-4:]
 
     try:
-        with TemporaryFile(prefix="add-glyphs") as tmp:
-            ttf.save(tmp, reorderTables=False)
-
-            # TTEdit requires `glyf` to be the last table
-            logger.info("reordering...")
-            tableOrder = ttf.keys()
-            if "GlyphOrder" in tableOrder:
-                tableOrder.remove("GlyphOrder")
-            if "glyf" in tableOrder:
-                tableOrder.remove("glyf")
-                tableOrder.append("glyf")
-
-            tmp.flush()
-            tmp.seek(0)
-            with open(outfont, "wb") as outfile:
-                reorderFontTables(tmp, outfile, tableOrder=tableOrder)
+        ttf.save(outfont, reorderTables=False)
     except Exception as exc:
         logger.error("Error while saving font file")
         raise AddGlyphUserError() from exc
