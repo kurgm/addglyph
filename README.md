@@ -10,9 +10,10 @@
 
 ## Windows バイナリのビルド
 
-1. `pip install fonttools pyinstaller`
-2. `build.bat`
-3. dist フォルダに addglyph.exe ができる
+1. `pip install -r requirements.txt`
+1. `pip install pyinstaller`
+1. `build.bat`
+1. dist フォルダに addglyph.exe ができる
 
 
 ## ライセンス

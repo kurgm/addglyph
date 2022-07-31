@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any, Optional, cast
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables as otTables_
 
+from monkeypatch import apply_monkey_patch
+
 
 otTables = cast("Any", otTables_)
 
@@ -28,6 +30,8 @@ version = "2.1"
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+apply_monkey_patch()
 
 
 class AddGlyphUserError(Exception):
