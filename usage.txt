@@ -80,48 +80,54 @@ VSファイルは次のような形式のテキストファイルで、フォン
 
 実行するとコンソールにいろいろ表示されます
 
-「DEBUG:root:font file = なんとか.ttf」…処理対象のフォントファイル
-「DEBUG:root:text file(s) = かん.txt, とか.txt」…処理対象のテキストファイル
-「DEBUG:root:VS file(s) = vsほげほげ.txt」…処理対象のVSファイル
+▼正常時に表示されるもの（DEBUGかINFOで始まるもの）
+
+「DEBUG:__main__:font file = なんとか.ttf」…処理対象のフォントファイル
+「DEBUG:__main__:text file(s) = かん.txt, とか.txt」…処理対象のテキストファイル
+「DEBUG:__main__:VS file(s) = vsほげほげ.txt」…処理対象のVSファイル
 「DEBUG:fontTools.ttLib:〜〜〜〜〜〜」…ライブラリのデバッグ用メッセージ
-「INFO:root:cmap subtable (format=12) created」…U+10000以上を追加するための処理をした
-「INFO:root:cmap subtable (format=14) created」…VSを追加するための処理をした
+「INFO:__main__:cmap subtable (format=12) created」…U+10000以上を追加するための処理をした
+「INFO:__main__:cmap subtable (format=14) created」…VSを追加するための処理をした
 「～～UserWarning: 'created' timestamp seems very low～～～」…たぶん無視してok
-「INFO:root:added: U+xxxx」…U+xxxxをフォントに追加した
-「INFO:root:already in font: U+xxxx」…U+xxxxは既にフォントに入っている
-「INFO:root:added base character: U+xxxx」…VSの基底文字U+xxxxをフォントに追加した
-「INFO:root:added: U+xxxx U+yyyy as default」
+「INFO:__main__:added: U+xxxx」…U+xxxxをフォントに追加した
+「INFO:__main__:already in font: U+xxxx」…U+xxxxは既にフォントに入っている
+「INFO:__main__:added base character: U+xxxx」…VSの基底文字U+xxxxをフォントに追加した
+「INFO:__main__:added: U+xxxx U+yyyy as default」
 　…デフォルトVS <U+xxxx U+yyyy>をフォントに追加した
-「INFO:root:added: U+xxxx U+yyyy as non-default」
+「INFO:__main__:added: U+xxxx U+yyyy as non-default」
 　…非デフォルトVS <U+xxxx U+yyyy>をフォントに追加した
-「INFO:root:already in font: U+xxxx U+yyyy」…<U+xxxx U+yyyy>は既にフォントに入っている
-「INFO:root:U+0020 should be added for VS to work on Windows 7」
+「INFO:__main__:already in font: U+xxxx U+yyyy」…<U+xxxx U+yyyy>は既にフォントに入っている
+「INFO:__main__:U+0020 should be added for VS to work on Windows 7」
 　…Windows 7でVSが機能するためにはU+0020がフォントに無いといけないが、無い
-「INFO:at least one non-BMP character should be added for VS to work on Windows 7」
+「INFO:__main__:at least one non-BMP character should be added for VS to work on Windows 7」
 　…Windows 7でVSが機能するためにはU+10000以上の文字が1つ以上フォントに無いといけないが、1つも無い
-「INFO:root:### glyphs added!」…###個のグリフを追加した
-「INFO:root:saving...」…保存中
-「INFO:root:reordering...」…フォントファイル内のテーブルを並び替え中
-「INFO:root:saved successfully: なんとか_new.ttf」…保存先フォント
+「INFO:__main__:### glyphs added!」…###個のグリフを追加した
+「INFO:__main__:saving...」…保存中
+「INFO:__main__:reordering...」…フォントファイル内のテーブルを並び替え中
+「INFO:__main__:saved successfully: なんとか_new.ttf」…保存先フォント
 「続行するには何かキーを押してください . . .」…何かキーを押すと終了します
 
-以下はエラー時に表示されます
+▼エラー時に表示されるもの
 
-「AssertionError: no font file specified」…フォントファイルが指定されていません
-「AssertionError: multiple font files specified」…複数のフォントファイルが指定されています
-（.otf, .ttf は1つだけ指定してください）
-「AssertionError: no text files or vs files specified」…テキストファイルもVSファイルも指定されていません
-「ERROR:root:Error while loading text file 'うんぬん.txt'」…テキストファイルの読み込みに失敗しました
+「usage: addglyph.exe 〜〜」の次の行に「addglyph.exe: error: no font file specified」
+　…フォントファイルが指定されていません
+「usage: addglyph.exe 〜〜」の次の行に「addglyph.exe: error: multiple font files specified」
+　…複数のフォントファイルが指定されています（.otf, .ttf は1つだけ指定してください）
+「usage: addglyph.exe 〜〜」の次の行に「addglyph.exe: error: no text files or vs files specified」
+　…テキストファイルもVSファイルも指定されていません
+「ERROR:__main__:Error while loading text file 'うんぬん.txt'」…テキストファイルの読み込みに失敗しました
 （存在するテキストファイルを指定しているか確認してください）
-「ERROR:root:Error while loading VS text file 'vsかんぬん.txt'」…VSファイルの読み込みに失敗しました
-「ERROR:root:Error while parsing VS text file line ##」…VSファイルの##行目の解析に失敗しました
-　「SyntaxError: invalid number of columns: ##」…その行を空白で区切ると3つ以上ある
-　「SyntaxError: invalid variation sequence length: ##」…1列目が「基底文字+字形選択子」になっていない
-　「SyntaxError: invalid default variation sequence option」…2列目が「D」でない
-「ERROR:root:Error while loading font file」…フォントファイルの読み込みに失敗しました
+「ERROR:__main__:Error while loading VS text file 'vsかんぬん.txt'」…VSファイルの読み込みに失敗しました
+「VSFileSyntaxError: file 'vsなんとか.txt', line #: [エラーの内容]」…VSファイルの#行目の解析に失敗しました
+　「invalid number of columns: ##」…その行を空白で区切ると3つ以上ある
+　「invalid variation sequence length: ##」…1列目が「基底文字+字形選択子」になっていない
+　「invalid default variation sequence option」…2列目が「D」でない
+「ERROR:__main__:Error while loading font file」…フォントファイルの読み込みに失敗しました
 （存在する壊れていないフォントファイルを指定しているか確認してください）
-「ERROR:root:Error while saving font file」…フォントファイルの書き込みに失敗しました
+「ERROR:__main__:Error while saving font file」…フォントファイルの書き込みに失敗しました
 （書き込みの権限があるか、ディスクに空き容量があるか、ファイルが使用中でないか確認して下さい）
+「ERROR:__main__:An unexpected error occurred!」「ERROR:__main__:(please report this to @kurgm)」
+　…想定外のエラーが発生しました（エラーログとともに @kurgm にご報告ください）
 
 ※一瞬で消えて表示が見えない時はコマンド プロンプトなどから実行してください
 　そして @kurgm まで報告していただけると助かります
@@ -140,29 +146,13 @@ VSファイルは次のような形式のテキストファイルで、フォン
 
 ■法的情報
 
-このソフトウェアは「fontTools」というライブラリを使用しています
-  https://github.com/fonttools/fonttools
+このプログラムを使って作成したフォントファイルを利用・公開・販売・頒布・埋め込みその他するときに
+クレジット表記のようなものをしていただく必要は一切ありません
+またフォントに特定のライセンスを付与しないといけないみたいな制約もありません
 
-以下は fontTools のライセンスです
+このソフトウェアを使用したことによって生じたいかなる損害についても作者 @kurgm はその責任を負いません
+フォントエディタとの相性が悪いとファイルが壊れて編集できなくなる可能性もあります（過去に例あり）ので
+必要に応じて使用前にフォントファイルのバックアップを取っておくことをおすすめします
 
-MIT License
-
-Copyright (c) 2017 Just van Rossum
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+このソフトウェアは「fontTools」を始めとするいくつかのライブラリを使用しています
+各ライブラリの著作権表示やライセンス情報は「license.txt」をご覧ください
