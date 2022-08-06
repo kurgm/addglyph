@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     UVSMap = dict[int, list[tuple[int, Optional[str]]]]
 
 
-version = "2.1"
+version = "2.2"
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
