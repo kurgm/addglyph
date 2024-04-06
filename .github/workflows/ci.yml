@@ -16,21 +16,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Timestamp
+        id: timestamp
+        shell: pwsh
+        run: |
+          $timestamp = git show -s --format="format:%ct"
+          "timestamp=$timestamp" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.12"
           architecture: "x86"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller==5.3
+          pip install -r requirements.txt -r build-requirements.txt
 
       - name: Build
         run: |
           .\build.bat
+        env:
+          PYTHONHASHSEED: 0
+          SOURCE_DATE_EPOCH: ${{ steps.timestamp.outputs.timestamp }}
+
+      - name: Checksum
+        run: |
+          Get-FileHash dist\addglyph.exe -Algorithm SHA256 | Format-List
 
       - name: Pack
         run: |

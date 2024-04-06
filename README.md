@@ -12,8 +12,7 @@
 
 ## Windows バイナリのビルド
 
-1. `pip install -r requirements.txt`
-1. `pip install pyinstaller`
+1. `pip install -r requirements.txt -r build-requirements.txt`
 1. `build.bat`
 1. dist フォルダに addglyph.exe ができる
 
