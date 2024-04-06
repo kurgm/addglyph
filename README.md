@@ -1,5 +1,7 @@
 # addglyph
 
+[![Build](https://github.com/kurgm/addglyph/actions/workflows/ci.yml/badge.svg?event=push)](https://github.com/kurgm/addglyph/actions/workflows/ci.yml)
+
 フォントに空のグリフを追加するプログラム
 
 

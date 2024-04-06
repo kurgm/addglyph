@@ -1,8 +1,13 @@
-name: Release
+name: Build
 on:
   push:
     tags:
       - "v*"
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   windows-build:
@@ -41,6 +46,7 @@ jobs:
 
   release:
     needs: windows-build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
