@@ -169,7 +169,7 @@ def get_cmap(ttf: TTFont, vs: bool = False):
         subt = cast(
             "_c_m_a_p.cmap_format_12", _c_m_a_p.CmapSubtable.newSubtable(12))
         subt.platformID = 3  # type: ignore
-        subt.platEncID = 1  # type: ignore
+        subt.platEncID = 10  # type: ignore
         subt.format = 12
         subt.reserved = 0
         subt.length = 0   # will be recalculated by compiler
