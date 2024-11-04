@@ -1,4 +1,4 @@
-# monkey patch based on fontTools version 4.34.4
+# monkey patch based on fontTools version 4.55.3
 from __future__ import annotations
 
 import array
