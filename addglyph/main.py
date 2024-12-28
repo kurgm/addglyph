@@ -1,19 +1,14 @@
-#!/usr/bin/env python
 from __future__ import annotations
 
-import argparse
-from collections.abc import Iterable, Sequence
-import contextlib
+from collections.abc import Iterable
 import logging
-import os
-import re
-import sys
 from typing import TYPE_CHECKING, Any, Optional, cast
 
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables as otTables_
 
-from monkeypatch import apply_monkey_patch
+from .error import AddGlyphUserError
+from .monkeypatch import apply_monkey_patch
 
 
 otTables = cast("Any", otTables_)
@@ -26,125 +21,9 @@ if TYPE_CHECKING:
     UVSMap = dict[int, list[tuple[int, Optional[str]]]]
 
 
-version = "2.3"
-
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 apply_monkey_patch()
-
-
-class AddGlyphUserError(Exception):
-    pass
-
-
-class VSFileSyntaxError(Exception):
-    def __init__(
-            self, *args,
-            filename: Optional[str] = None,
-            lineno: Optional[int] = None,
-            **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.filename = filename
-        self.lineno = lineno
-
-    def __str__(self) -> str:
-        if self.filename is None or self.lineno is None:
-            return super().__str__()
-
-        return "file {filename!r}, line {lineno}: {message}".format(
-            filename=self.filename, lineno=self.lineno,
-            message=super().__str__())
-
-
-entity_re = re.compile(r"&#(?:x([0-9a-f]+)|([0-9]+));", re.IGNORECASE)
-
-
-def decode_entity(s: str) -> str:
-    return entity_re.sub(lambda m: (
-        chr(int(m.group(1), 16)) if m.group(1) else
-        chr(int(m.group(2), 10))
-    ), s)
-
-
-@contextlib.contextmanager
-def open_text(path: str, *args, err_hint: str = "", **kwargs):
-    try:
-        with open(path, *args, encoding="utf-8-sig", **kwargs) as file:
-            yield file
-    except Exception as exc:
-        logger.error("Error while loading {err_hint}{path!r}".format(
-            err_hint=err_hint + " " if err_hint else "",
-            path=path))
-        if isinstance(exc, (OSError, UnicodeError, VSFileSyntaxError)):
-            raise AddGlyphUserError() from exc
-        else:
-            raise
-
-
-def get_chars_set(textfiles: Sequence[str]) -> set[str]:
-    chars: set[str] = set()
-
-    for f in textfiles:
-        with open_text(f, err_hint="text file") as file:
-            for line in file:
-                chars.update(decode_entity(line))
-
-    chars -= {"\t", "\r", "\n"}
-    return chars
-
-
-def parse_vs_line(line: str) -> Optional[tuple[tuple[int, int], bool]]:
-    row = [decode_entity(col) for col in line.split()]
-    if not row:
-        # empty line
-        return None
-
-    if len(row) > 2:
-        raise VSFileSyntaxError(
-            "invalid number of columns: {}".format(len(row)))
-    elif len(row) == 2:
-        seq_str, is_default_str = row
-    else:
-        seq_str = row[0]
-        is_default_str = ""
-
-    seq = tuple([ord(c) for c in seq_str])
-    if len(seq) != 2:
-        raise VSFileSyntaxError(
-            "invalid variation sequence length: {}".format(len(seq)))
-
-    if is_default_str == "D":
-        is_default = True
-    elif is_default_str == "":
-        is_default = False
-    else:
-        raise VSFileSyntaxError(
-            "invalid default variation sequence option: {}".format(
-                is_default_str))
-
-    return seq, is_default
-
-
-def get_vs_dict(vsfiles: Sequence[str]) -> dict[tuple[int, int], bool]:
-    vs: dict[tuple[int, int], bool] = {}
-
-    for f in vsfiles:
-        with open_text(f, err_hint="VS text file") as file:
-            for lineno, line in enumerate(file):
-                try:
-                    dat = parse_vs_line(line)
-                except VSFileSyntaxError as exc:
-                    exc.lineno = lineno + 1
-                    exc.filename = f
-                    raise
-                if dat is None:
-                    # empty line
-                    continue
-                seq, is_default = dat
-                vs[seq] = is_default
-
-    return vs
 
 
 def add_blank_glyph(
@@ -383,109 +262,3 @@ def addglyph(
         raise AddGlyphUserError() from exc
 
     logger.info("saved successfully: {}".format(outfont))
-
-
-def pause() -> None:
-    if pause.batch:
-        return
-
-    if os.name == "nt":
-        os.system("pause")
-    else:
-        input("Press Enter to continue . . .")
-
-
-pause.batch = False
-
-
-def main() -> None:
-    argparser = argparse.ArgumentParser(description=(
-        "addglyph -- version {version}\n"
-        "Adds blank glyphs to a TrueType or OpenType font file."
-    ).format(version=version))
-
-    argparser.add_argument(
-        "--quiet", "-q", action="store_true",
-        help="will not write log message to stderr.")
-    argparser.add_argument(
-        "--batch", "-b", action="store_true",
-        help="will not pause on exit.")
-
-    argparser.add_argument("--version", action="version", version=version)
-
-    argparser.add_argument(
-        "-f", metavar="FONTFILE", dest="fontfiles",
-        action="append", default=[],
-        help="specify a font file to add glyphs to.")
-    argparser.add_argument(
-        "-t", metavar="TEXTFILE", dest="textfiles",
-        action="append", default=[],
-        help="specify text files that contain characters to add.")
-    argparser.add_argument(
-        "-v", metavar="VSFILE", dest="vsfiles",
-        action="append", default=[],
-        help="specify variation sequence data files.")
-
-    argparser.add_argument(
-        "other_files", metavar="FILE", nargs="*",
-        help="specify a font file to add glyphs to.")
-
-    argparser.add_argument(
-        "-o", metavar="OUTFILE", dest="outfile",
-        help="specify the a file to write the output to.")
-
-    argset = argparser.parse_intermixed_args()
-
-    if argset.quiet:
-        logging.basicConfig(level=logging.ERROR)
-
-    if argset.batch:
-        pause.batch = True
-
-    fontfiles: list[str] = list(argset.fontfiles)
-    textfiles: list[str] = list(argset.textfiles)
-    vsfiles: list[str] = list(argset.vsfiles)
-    outfont: Optional[str] = argset.outfile
-
-    for other_file in cast("list[str]", argset.other_files):
-        if other_file[-4:].lower() in (".ttf", ".otf"):
-            fontfiles.append(other_file)
-        elif os.path.basename(other_file)[:2].lower() == "vs":
-            vsfiles.append(other_file)
-        else:
-            textfiles.append(other_file)
-
-    if not fontfiles:
-        argparser.error("no font file specified")
-    if len(fontfiles) > 1:
-        argparser.error("multiple font files specified")
-    fontfile = fontfiles[0]
-
-    if not textfiles and not vsfiles:
-        argparser.error("no text files or vs files specified")
-
-    logger.debug("font file = {}".format(fontfile))
-    if textfiles:
-        logger.debug("text file(s) = {}".format(", ".join(textfiles)))
-    if vsfiles:
-        logger.debug("VS file(s) = {}".format(", ".join(vsfiles)))
-    if outfont is not None:
-        logger.debug("out = {}".format(outfont))
-
-    chars = get_chars_set(textfiles)
-    vs = get_vs_dict(vsfiles)
-    addglyph(fontfile, chars, vs, outfont)
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except AddGlyphUserError as exc:
-        logger.exception("An error occurred", exc_info=exc.__cause__)
-        sys.exit(2)
-    except Exception:
-        logger.exception("An unexpected error occurred!")
-        logger.error("(please report this to @kurgm)")
-        sys.exit(1)
-    finally:
-        pause()
