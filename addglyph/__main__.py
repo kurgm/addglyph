@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Optional, cast
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f, otTables as otTables_
 
-from monkeypatch import apply_monkey_patch
+from .monkeypatch import apply_monkey_patch
 
 
 otTables = cast("Any", otTables_)
