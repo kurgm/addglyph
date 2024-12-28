@@ -1,0 +1,14 @@
+[project]
+name = "addglyph"
+version = "2.3"
+description = "フォントに空のグリフを追加するプログラム"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fonttools==4.55.3",
+]
+
+[dependency-groups]
+build = [
+    "pyinstaller>=6.11.1",
+]
