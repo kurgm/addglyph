@@ -12,8 +12,9 @@
 
 ## Windows バイナリのビルド
 
-1. `pip install -r requirements.txt -r build-requirements.txt`
-1. `build.bat`
+Python 3 および [uv](https://docs.astral.sh/uv/) が必要
+
+1. `uv run --group build .\build.bat`
 1. dist フォルダに addglyph.exe ができる
 
 
