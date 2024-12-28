@@ -82,9 +82,9 @@ VSファイルは次のような形式のテキストファイルで、フォン
 
 ▼正常時に表示されるもの（DEBUGかINFOで始まるもの）
 
-「DEBUG:__main__:font file = なんとか.ttf」…処理対象のフォントファイル
-「DEBUG:__main__:text file(s) = かん.txt, とか.txt」…処理対象のテキストファイル
-「DEBUG:__main__:VS file(s) = vsほげほげ.txt」…処理対象のVSファイル
+「DEBUG:addglyph.__main__:font file = なんとか.ttf」…処理対象のフォントファイル
+「DEBUG:addglyph.__main__:text file(s) = かん.txt, とか.txt」…処理対象のテキストファイル
+「DEBUG:addglyph.__main__:VS file(s) = vsほげほげ.txt」…処理対象のVSファイル
 「DEBUG:fontTools.ttLib〜〜〜〜〜〜」…ライブラリのデバッグ用メッセージ
 「INFO:addglyph.main:cmap subtable (format=12) created」…U+10000以上を追加するための処理をした
 「INFO:addglyph.main:cmap subtable (format=14) created」…VSを追加するための処理をした
@@ -126,7 +126,7 @@ VSファイルは次のような形式のテキストファイルで、フォン
 （存在する壊れていないフォントファイルを指定しているか確認してください）
 「ERROR:addglyph.main:Error while saving font file」…フォントファイルの書き込みに失敗しました
 （書き込みの権限があるか、ディスクに空き容量があるか、ファイルが使用中でないか確認して下さい）
-「ERROR:__main__:An unexpected error occurred!」「ERROR:__main__:(please report this to @kurgm)」
+「ERROR:addglyph.__main__:An unexpected error occurred!」「ERROR:addglyph.__main__:(please report this to @kurgm)」
 　…想定外のエラーが発生しました（エラーログとともに @kurgm にご報告ください）
 
 ※一瞬で消えて表示が見えない時はコマンド プロンプトなどから実行してください
