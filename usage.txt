@@ -85,26 +85,26 @@ VSファイルは次のような形式のテキストファイルで、フォン
 「DEBUG:__main__:font file = なんとか.ttf」…処理対象のフォントファイル
 「DEBUG:__main__:text file(s) = かん.txt, とか.txt」…処理対象のテキストファイル
 「DEBUG:__main__:VS file(s) = vsほげほげ.txt」…処理対象のVSファイル
-「DEBUG:fontTools.ttLib:〜〜〜〜〜〜」…ライブラリのデバッグ用メッセージ
-「INFO:__main__:cmap subtable (format=12) created」…U+10000以上を追加するための処理をした
-「INFO:__main__:cmap subtable (format=14) created」…VSを追加するための処理をした
+「DEBUG:fontTools.ttLib〜〜〜〜〜〜」…ライブラリのデバッグ用メッセージ
+「INFO:addglyph.main:cmap subtable (format=12) created」…U+10000以上を追加するための処理をした
+「INFO:addglyph.main:cmap subtable (format=14) created」…VSを追加するための処理をした
 「～～UserWarning: 'created' timestamp seems very low～～～」…たぶん無視してok
-「INFO:__main__:added: U+xxxx」…U+xxxxをフォントに追加した
-「INFO:__main__:already in font: U+xxxx」…U+xxxxは既にフォントに入っている
-「INFO:__main__:added base character: U+xxxx」…VSの基底文字U+xxxxをフォントに追加した
-「INFO:__main__:added: U+xxxx U+yyyy as default」
+「INFO:addglyph.main:added: U+xxxx」…U+xxxxをフォントに追加した
+「INFO:addglyph.main:already in font: U+xxxx」…U+xxxxは既にフォントに入っている
+「INFO:addglyph.main:added base character: U+xxxx」…VSの基底文字U+xxxxをフォントに追加した
+「INFO:addglyph.main:added: U+xxxx U+yyyy as default」
 　…デフォルトVS <U+xxxx U+yyyy>をフォントに追加した
-「INFO:__main__:added: U+xxxx U+yyyy as non-default」
+「INFO:addglyph.main:added: U+xxxx U+yyyy as non-default」
 　…非デフォルトVS <U+xxxx U+yyyy>をフォントに追加した
-「INFO:__main__:already in font: U+xxxx U+yyyy」…<U+xxxx U+yyyy>は既にフォントに入っている
-「INFO:__main__:U+0020 should be added for VS to work on Windows 7」
+「INFO:addglyph.main:already in font: U+xxxx U+yyyy」…<U+xxxx U+yyyy>は既にフォントに入っている
+「INFO:addglyph.main:U+0020 should be added for VS to work on Windows 7」
 　…Windows 7でVSが機能するためにはU+0020がフォントに無いといけないが、無い
-「INFO:__main__:at least one non-BMP character should be added for VS to work on Windows 7」
+「INFO:addglyph.main:at least one non-BMP character should be added for VS to work on Windows 7」
 　…Windows 7でVSが機能するためにはU+10000以上の文字が1つ以上フォントに無いといけないが、1つも無い
-「INFO:__main__:### glyphs added!」…###個のグリフを追加した
-「INFO:__main__:saving...」…保存中
-「INFO:__main__:reordering...」…フォントファイル内のテーブルを並び替え中
-「INFO:__main__:saved successfully: なんとか_new.ttf」…保存先フォント
+「INFO:addglyph.main:### glyphs added!」…###個のグリフを追加した
+「INFO:addglyph.main:saving...」…保存中
+「INFO:addglyph.main:reordering...」…フォントファイル内のテーブルを並び替え中
+「INFO:addglyph.main:saved successfully: なんとか_new.ttf」…保存先フォント
 「続行するには何かキーを押してください . . .」…何かキーを押すと終了します
 
 ▼エラー時に表示されるもの
@@ -115,16 +115,16 @@ VSファイルは次のような形式のテキストファイルで、フォン
 　…複数のフォントファイルが指定されています（.otf, .ttf は1つだけ指定してください）
 「usage: addglyph.exe 〜〜」の次の行に「addglyph.exe: error: no text files or vs files specified」
 　…テキストファイルもVSファイルも指定されていません
-「ERROR:__main__:Error while loading text file 'うんぬん.txt'」…テキストファイルの読み込みに失敗しました
+「ERROR:addglyph.inputfile:Error while loading text file 'うんぬん.txt'」…テキストファイルの読み込みに失敗しました
 （存在するテキストファイルを指定しているか確認してください）
-「ERROR:__main__:Error while loading VS text file 'vsかんぬん.txt'」…VSファイルの読み込みに失敗しました
+「ERROR:addglyph.inputfile:Error while loading VS text file 'vsかんぬん.txt'」…VSファイルの読み込みに失敗しました
 「VSFileSyntaxError: file 'vsなんとか.txt', line #: [エラーの内容]」…VSファイルの#行目の解析に失敗しました
 　「invalid number of columns: ##」…その行を空白で区切ると3つ以上ある
 　「invalid variation sequence length: ##」…1列目が「基底文字+字形選択子」になっていない
 　「invalid default variation sequence option」…2列目が「D」でない
-「ERROR:__main__:Error while loading font file」…フォントファイルの読み込みに失敗しました
+「ERROR:addglyph.main:Error while loading font file」…フォントファイルの読み込みに失敗しました
 （存在する壊れていないフォントファイルを指定しているか確認してください）
-「ERROR:__main__:Error while saving font file」…フォントファイルの書き込みに失敗しました
+「ERROR:addglyph.main:Error while saving font file」…フォントファイルの書き込みに失敗しました
 （書き込みの権限があるか、ディスクに空き容量があるか、ファイルが使用中でないか確認して下さい）
 「ERROR:__main__:An unexpected error occurred!」「ERROR:__main__:(please report this to @kurgm)」
 　…想定外のエラーが発生しました（エラーログとともに @kurgm にご報告ください）
