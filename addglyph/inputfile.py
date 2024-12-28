@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 import contextlib
 import logging
 import re
-from typing import Optional
+from collections.abc import Sequence
 
 from .error import AddGlyphUserError
-
 
 logger = logging.getLogger(__name__)
 
 
 class VSFileSyntaxError(Exception):
     def __init__(
-            self, *args,
-            filename: Optional[str] = None,
-            lineno: Optional[int] = None,
-            **kwargs) -> None:
+        self,
+        *args,
+        filename: str | None = None,
+        lineno: int | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.filename = filename
         self.lineno = lineno
@@ -26,19 +26,23 @@ class VSFileSyntaxError(Exception):
         if self.filename is None or self.lineno is None:
             return super().__str__()
 
-        return "file {filename!r}, line {lineno}: {message}".format(
-            filename=self.filename, lineno=self.lineno,
-            message=super().__str__())
+        return (
+            f"file {self.filename!r}, line {self.lineno}: {super().__str__()}"
+        )
 
 
 entity_re = re.compile(r"&#(?:x([0-9a-f]+)|([0-9]+));", re.IGNORECASE)
 
 
 def decode_entity(s: str) -> str:
-    return entity_re.sub(lambda m: (
-        chr(int(m.group(1), 16)) if m.group(1) else
-        chr(int(m.group(2), 10))
-    ), s)
+    return entity_re.sub(
+        lambda m: (
+            chr(int(m.group(1), 16))
+            if m.group(1)
+            else chr(int(m.group(2), 10))
+        ),
+        s,
+    )
 
 
 @contextlib.contextmanager
@@ -47,10 +51,12 @@ def open_text(path: str, *args, err_hint: str = "", **kwargs):
         with open(path, *args, encoding="utf-8-sig", **kwargs) as file:
             yield file
     except Exception as exc:
-        logger.error("Error while loading {err_hint}{path!r}".format(
-            err_hint=err_hint + " " if err_hint else "",
-            path=path))
-        if isinstance(exc, (OSError, UnicodeError, VSFileSyntaxError)):
+        logger.error(
+            "Error while loading {err_hint}{path!r}".format(
+                err_hint=err_hint + " " if err_hint else "", path=path
+            )
+        )
+        if isinstance(exc, OSError | UnicodeError | VSFileSyntaxError):
             raise AddGlyphUserError() from exc
         else:
             raise
@@ -68,15 +74,14 @@ def get_chars_set(textfiles: Sequence[str]) -> set[str]:
     return chars
 
 
-def parse_vs_line(line: str) -> Optional[tuple[tuple[int, int], bool]]:
+def parse_vs_line(line: str) -> tuple[tuple[int, int], bool] | None:
     row = [decode_entity(col) for col in line.split()]
     if not row:
         # empty line
         return None
 
     if len(row) > 2:
-        raise VSFileSyntaxError(
-            "invalid number of columns: {}".format(len(row)))
+        raise VSFileSyntaxError(f"invalid number of columns: {len(row)}")
     elif len(row) == 2:
         seq_str, is_default_str = row
     else:
@@ -86,7 +91,8 @@ def parse_vs_line(line: str) -> Optional[tuple[tuple[int, int], bool]]:
     seq = tuple([ord(c) for c in seq_str])
     if len(seq) != 2:
         raise VSFileSyntaxError(
-            "invalid variation sequence length: {}".format(len(seq)))
+            f"invalid variation sequence length: {len(seq)}"
+        )
 
     if is_default_str == "D":
         is_default = True
@@ -94,8 +100,8 @@ def parse_vs_line(line: str) -> Optional[tuple[tuple[int, int], bool]]:
         is_default = False
     else:
         raise VSFileSyntaxError(
-            "invalid default variation sequence option: {}".format(
-                is_default_str))
+            f"invalid default variation sequence option: {is_default_str}"
+        )
 
     return seq, is_default
 
