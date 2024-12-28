@@ -12,3 +12,11 @@ dependencies = [
 build = [
     "pyinstaller>=6.11.1",
 ]
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+extend-select = [
+  "UP",
+]
