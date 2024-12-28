@@ -4,7 +4,7 @@ import argparse
 import logging
 import os
 import sys
-from typing import Optional, cast
+from typing import cast
 
 
 from . import version
@@ -31,40 +31,63 @@ pause.batch = False
 
 
 def main() -> None:
-    argparser = argparse.ArgumentParser(description=(
-        "addglyph -- version {version}\n"
-        "Adds blank glyphs to a TrueType or OpenType font file."
-    ).format(version=version))
+    argparser = argparse.ArgumentParser(
+        description=(
+            f"addglyph -- version {version}\n"
+            "Adds blank glyphs to a TrueType or OpenType font file."
+        )
+    )
 
     argparser.add_argument(
-        "--quiet", "-q", action="store_true",
-        help="will not write log message to stderr.")
+        "--quiet",
+        "-q",
+        action="store_true",
+        help="will not write log message to stderr.",
+    )
     argparser.add_argument(
-        "--batch", "-b", action="store_true",
-        help="will not pause on exit.")
+        "--batch", "-b", action="store_true", help="will not pause on exit."
+    )
 
     argparser.add_argument("--version", action="version", version=version)
 
     argparser.add_argument(
-        "-f", metavar="FONTFILE", dest="fontfiles",
-        action="append", default=[],
-        help="specify a font file to add glyphs to.")
+        "-f",
+        metavar="FONTFILE",
+        dest="fontfiles",
+        action="append",
+        default=[],
+        help="specify a font file to add glyphs to.",
+    )
     argparser.add_argument(
-        "-t", metavar="TEXTFILE", dest="textfiles",
-        action="append", default=[],
-        help="specify text files that contain characters to add.")
+        "-t",
+        metavar="TEXTFILE",
+        dest="textfiles",
+        action="append",
+        default=[],
+        help="specify text files that contain characters to add.",
+    )
     argparser.add_argument(
-        "-v", metavar="VSFILE", dest="vsfiles",
-        action="append", default=[],
-        help="specify variation sequence data files.")
+        "-v",
+        metavar="VSFILE",
+        dest="vsfiles",
+        action="append",
+        default=[],
+        help="specify variation sequence data files.",
+    )
 
     argparser.add_argument(
-        "other_files", metavar="FILE", nargs="*",
-        help="specify a font file to add glyphs to.")
+        "other_files",
+        metavar="FILE",
+        nargs="*",
+        help="specify a font file to add glyphs to.",
+    )
 
     argparser.add_argument(
-        "-o", metavar="OUTFILE", dest="outfile",
-        help="specify the a file to write the output to.")
+        "-o",
+        metavar="OUTFILE",
+        dest="outfile",
+        help="specify the a file to write the output to.",
+    )
 
     argset = argparser.parse_intermixed_args()
 
@@ -77,7 +100,7 @@ def main() -> None:
     fontfiles: list[str] = list(argset.fontfiles)
     textfiles: list[str] = list(argset.textfiles)
     vsfiles: list[str] = list(argset.vsfiles)
-    outfont: Optional[str] = argset.outfile
+    outfont: str | None = argset.outfile
 
     for other_file in cast("list[str]", argset.other_files):
         if other_file[-4:].lower() in (".ttf", ".otf"):
@@ -96,13 +119,13 @@ def main() -> None:
     if not textfiles and not vsfiles:
         argparser.error("no text files or vs files specified")
 
-    logger.debug("font file = {}".format(fontfile))
+    logger.debug(f"font file = {fontfile}")
     if textfiles:
         logger.debug("text file(s) = {}".format(", ".join(textfiles)))
     if vsfiles:
         logger.debug("VS file(s) = {}".format(", ".join(vsfiles)))
     if outfont is not None:
-        logger.debug("out = {}".format(outfont))
+        logger.debug(f"out = {outfont}")
 
     chars = get_chars_set(textfiles)
     vs = get_vs_dict(vsfiles)

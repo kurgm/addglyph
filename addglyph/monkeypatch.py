@@ -1,4 +1,7 @@
 # monkey patch based on fontTools version 4.55.3
+
+# ruff: noqa: UP031
+
 from __future__ import annotations
 
 import array
@@ -16,7 +19,6 @@ if TYPE_CHECKING:
 
 
 def apply_monkey_patch():
-
     # Make sure head.indexToLocFormat = 1
     def loca_compile(self: _l_o_c_a.table__l_o_c_a, ttFont: TTFont) -> bytes:
         try:
@@ -24,7 +26,7 @@ def apply_monkey_patch():
         except AttributeError:
             self.set([])
         locations = array.array("I", self.locations)
-        cast("Any", ttFont['head']).indexToLocFormat = 1
+        cast("Any", ttFont["head"]).indexToLocFormat = 1
         if sys.byteorder != "big":
             locations.byteswap()
         return locations.tobytes()
@@ -38,8 +40,10 @@ def apply_monkey_patch():
         for glyphName in ttFont.getGlyphOrder():
             advanceWidth, sideBearing = self.metrics[glyphName]
             if advanceWidth < 0:
-                _h_m_t_x.log.error("Glyph %r has negative advance %s" % (
-                    glyphName, self.advanceName))
+                _h_m_t_x.log.error(
+                    "Glyph %r has negative advance %s"
+                    % (glyphName, self.advanceName)
+                )
                 hasNegativeAdvances = True
             metrics.append([advanceWidth, sideBearing])
 
@@ -61,7 +65,8 @@ def apply_monkey_patch():
             if "out of range" in str(e) and hasNegativeAdvances:
                 raise TTLibError(
                     "'%s' table can't contain negative advance %ss"
-                    % (self.tableTag, self.advanceName))
+                    % (self.tableTag, self.advanceName)
+                )
             else:
                 raise
         return data
