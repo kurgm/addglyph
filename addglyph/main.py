@@ -2,20 +2,16 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f
-from fontTools.ttLib.tables import otTables as otTables_
 
 from .error import AddGlyphUserError
 from .monkeypatch import apply_monkey_patch
 
-otTables = cast("Any", otTables_)
-
-
 if TYPE_CHECKING:
-    from fontTools.ttLib.tables import G_S_U_B_, O_S_2f_2, _h_m_t_x, _v_m_t_x
+    from fontTools.ttLib.tables import O_S_2f_2, _h_m_t_x, _v_m_t_x
 
     CMap = dict[int, str]
     UVSMap = dict[int, list[tuple[int, str | None]]]
@@ -113,67 +109,6 @@ def add_to_cmap_vs(
     )
 
 
-def check_vs(ttf: TTFont) -> None:
-    # Check for VS font requirements on Windows 7
-    # Reference: http://glyphwiki.org/wiki/User:emk
-
-    _sub4, subt, sub14 = get_cmap(ttf, vs=True)
-    assert sub14 is not None  # vs=True
-
-    subt.cmap = cast("CMap", subt.cmap)
-    sub14.uvsDict = cast("UVSMap", sub14.uvsDict)
-
-    if 0x20 not in subt.cmap:
-        logger.info("U+0020 should be added for VS to work on Windows 7")
-
-    if all(codepoint < 0x10000 for codepoint in subt.cmap.keys()):
-        logger.info(
-            "at least one non-BMP character should be added for VS to work "
-            "on Windows 7"
-        )
-
-    # Don't use Default UVS Table
-    for selector, uvList in sub14.uvsDict.items():
-        if any(glyphname is None for base, glyphname in uvList):
-            newUvList = []
-            for base, glyphname in uvList:
-                if glyphname is None:
-                    assert (
-                        base in subt.cmap
-                    ), f"base character (U+{base:04X}) not in font"
-                    newUvList.append([base, subt.cmap[base]])
-                else:
-                    newUvList.append([base, glyphname])
-            sub14.uvsDict[selector] = newUvList
-
-    # set 57th bit of ulUnicodeRange in OS/2 table
-    os2 = cast("O_S_2f_2.table_O_S_2f_2", ttf["OS/2"])
-    os2.ulUnicodeRange2 |= 1 << (57 - 32)
-
-    gsub = cast("G_S_U_B_.table_G_S_U_B_", ttf["GSUB"])
-    records = gsub.table.ScriptList.ScriptRecord
-    if not any(record.ScriptTag == "hani" for record in records):
-        scriptrecord = otTables.ScriptRecord()
-        scriptrecord.ScriptTag = "hani"
-        scriptrecord.Script = otTables.Script()
-        scriptrecord.Script.DefaultLangSys = otTables.DefaultLangSys()
-        scriptrecord.Script.DefaultLangSys.ReqFeatureIndex = 65535
-        scriptrecord.Script.DefaultLangSys.FeatureCount = 1
-        feature_index = gsub.table.FeatureList.FeatureCount
-        scriptrecord.Script.DefaultLangSys.FeatureIndex = [feature_index]
-        records.append(scriptrecord)
-        gsub.table.ScriptList.ScriptCount += 1
-
-        featurerecord = otTables.FeatureRecord()
-        featurerecord.FeatureTag = "aalt"
-        featurerecord.Feature = otTables.Feature()
-        featurerecord.Feature.FeatureParams = None
-        featurerecord.Feature.LookupCount = 0
-        featurerecord.Feature.LookupListIndex = []
-        gsub.table.FeatureList.FeatureRecord.append(featurerecord)
-        gsub.table.FeatureList.FeatureCount += 1
-
-
 def addglyph(
     fontfile: str,
     chars: Iterable[str],
@@ -229,6 +164,7 @@ def addglyph(
 
         if is_default:
             # Windows 7 seems not to support default UVS table
+            # Reference: http://glyphwiki.org/wiki/User:emk
             if base in subt.cmap:
                 glyphname = subt.cmap[base]
             else:
@@ -264,9 +200,6 @@ def addglyph(
     new_codepages: set[int] = os2.recalcCodePageRanges(ttf)
     # Retain old codepages
     os2.setCodePageRanges(old_codepages | new_codepages)
-
-    if vs:
-        check_vs(ttf)
 
     logger.info(f"{added_count} glyphs added!")
     logger.info("saving...")
