@@ -6,12 +6,10 @@ import os
 import sys
 from typing import cast
 
-
 from . import version
 from .error import AddGlyphUserError
-from .inputfile import get_chars_set, get_vs_dict
+from .inputfile import get_chars_set, get_gsub_spec, get_vs_dict
 from .main import addglyph
-
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -74,6 +72,14 @@ def main() -> None:
         default=[],
         help="specify variation sequence data files.",
     )
+    argparser.add_argument(
+        "-g",
+        metavar="GSUBFILE",
+        dest="gsubfiles",
+        action="append",
+        default=[],
+        help="specify GSUB feature data files.",
+    )
 
     argparser.add_argument(
         "other_files",
@@ -100,6 +106,7 @@ def main() -> None:
     fontfiles: list[str] = list(argset.fontfiles)
     textfiles: list[str] = list(argset.textfiles)
     vsfiles: list[str] = list(argset.vsfiles)
+    gsubfiles: list[str] = list(argset.gsubfiles)
     outfont: str | None = argset.outfile
 
     for other_file in cast("list[str]", argset.other_files):
@@ -107,6 +114,8 @@ def main() -> None:
             fontfiles.append(other_file)
         elif os.path.basename(other_file)[:2].lower() == "vs":
             vsfiles.append(other_file)
+        elif os.path.basename(other_file)[:4].lower() == "gsub":
+            gsubfiles.append(other_file)
         else:
             textfiles.append(other_file)
 
@@ -116,20 +125,23 @@ def main() -> None:
         argparser.error("multiple font files specified")
     fontfile = fontfiles[0]
 
-    if not textfiles and not vsfiles:
-        argparser.error("no text files or vs files specified")
+    if not textfiles and not vsfiles and not gsubfiles:
+        argparser.error("none of text files, vs files or gsub files specified")
 
     logger.debug(f"font file = {fontfile}")
     if textfiles:
-        logger.debug("text file(s) = {}".format(", ".join(textfiles)))
+        logger.debug(f"text file(s) = {', '.join(textfiles)}")
     if vsfiles:
-        logger.debug("VS file(s) = {}".format(", ".join(vsfiles)))
+        logger.debug(f"VS file(s) = {', '.join(vsfiles)}")
+    if gsubfiles:
+        logger.debug(f"GSUB file(s) = {', '.join(gsubfiles)}")
     if outfont is not None:
         logger.debug(f"out = {outfont}")
 
     chars = get_chars_set(textfiles)
     vs = get_vs_dict(vsfiles)
-    addglyph(fontfile, chars, vs, outfont)
+    gsub = get_gsub_spec(gsubfiles)
+    addglyph(fontfile, chars, vs, gsub, outfont)
 
 
 try:
