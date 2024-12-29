@@ -253,6 +253,18 @@ def addglyph(
 
         vs_in_font.add(seq)
 
+    os2 = cast("O_S_2f_2.table_O_S_2f_2", ttf["OS/2"])
+
+    old_uniranges: set[int] = os2.getUnicodeRanges()
+    new_uniranges: set[int] = os2.recalcUnicodeRanges(ttf)
+    # Retain old uniranges
+    os2.setUnicodeRanges(old_uniranges | new_uniranges)
+
+    old_codepages: set[int] = os2.getCodePageRanges()
+    new_codepages: set[int] = os2.recalcCodePageRanges(ttf)
+    # Retain old codepages
+    os2.setCodePageRanges(old_codepages | new_codepages)
+
     if vs:
         check_vs(ttf)
 
