@@ -125,3 +125,6 @@ def get_vs_dict(vsfiles: Sequence[str]) -> dict[tuple[int, int], bool]:
                 vs[seq] = is_default
 
     return vs
+
+
+GlyphSpec = tuple[int, int | None] | int

@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, cast
 
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f
 
 from .error import AddGlyphUserError
+from .inputfile import GlyphSpec
 from .monkeypatch import apply_monkey_patch
 
 if TYPE_CHECKING:
-    from fontTools.ttLib.tables import O_S_2f_2, _h_m_t_x, _v_m_t_x
+    from fontTools.ttLib.tables import G_S_U_B_, O_S_2f_2, _h_m_t_x, _v_m_t_x
 
     CMap = dict[int, str]
     UVSMap = dict[int, list[tuple[int, str | None]]]
@@ -139,6 +140,71 @@ def generate_glyphname(codepoint: int, selector: int | None = None) -> str:
         return f"u{codepoint:04X}"
 
 
+def undo_gsub_win7_fix(ttf: TTFont) -> None:
+    """Remove the unnecessary Windows 7 fix in the GSUB table.
+
+    In versions of `addglyph` before 3.0, a dummy feature was added to the GSUB
+    table to support VSes on Windows 7. However, this dummy feature is not
+    actually needed because the presence of the GSUB table itself is
+    sufficient, and `addglyph` did not add a GSUB table on its own.
+    Additionally, this dummy feature interferes with the new functionality for
+    adding substitution rules.
+    This function removes the dummy feature from the GSUB table, if it exists.
+    """
+    gsub = cast("G_S_U_B_.table_G_S_U_B_", ttf["GSUB"])
+    for script_index, script_record in enumerate(
+        gsub.table.ScriptList.ScriptRecord
+    ):
+        if script_record.ScriptTag != "hani":
+            continue
+        if script_record.Script.LangSysCount != 0:
+            continue
+        if script_record.Script.DefaultLangSys is None:
+            continue
+        if script_record.Script.DefaultLangSys.LookupOrder is not None:
+            continue
+        if script_record.Script.DefaultLangSys.ReqFeatureIndex != 0xFFFF:
+            continue
+        if script_record.Script.DefaultLangSys.FeatureCount != 1:
+            continue
+        feature_index: int = script_record.Script.DefaultLangSys.FeatureIndex[
+            0
+        ]
+        feature_record = gsub.table.FeatureList.FeatureRecord[feature_index]
+        if feature_record.FeatureTag != "aalt":
+            continue
+        if feature_record.Feature.FeatureParams is not None:
+            continue
+        if feature_record.Feature.LookupCount != 0:
+            continue
+        break
+    else:
+        return
+    del gsub.table.ScriptList.ScriptRecord[script_index]
+    gsub.table.ScriptList.ScriptCount -= 1
+
+    # Confirm that the feature is not used in other langsys before deleting it
+    if not any(
+        feature_index in langsys.FeatureIndex
+        for script_record in gsub.table.ScriptList.ScriptRecord
+        for langsys in [
+            script_record.Script.DefaultLangSys,
+            *(
+                langsys_record.LangSys
+                for langsys_record in script_record.Script.LangSysRecord
+            ),
+        ]
+        if langsys is not None
+    ):
+        del gsub.table.FeatureList.FeatureRecord[feature_index]
+        gsub.table.FeatureList.FeatureCount -= 1
+        logger.debug(
+            "Removed the dummy feature and script from the GSUB table"
+        )
+    else:
+        logger.debug("Removed the dummy feature from the GSUB table")
+
+
 class AddGlyphHandler:
     def __init__(self, fontfile: str) -> None:
         try:
@@ -229,6 +295,7 @@ def addglyph(
     fontfile: str,
     chars: Iterable[str],
     vs: dict[tuple[int, int], bool] = {},
+    gsub_gspec: Mapping[str, Iterable[tuple[GlyphSpec, GlyphSpec]]] = {},
     outfont: str | None = None,
 ) -> None:
     handler = AddGlyphHandler(fontfile)
@@ -237,6 +304,9 @@ def addglyph(
         handler.add_glyph(codepoint)
     for (base, selector), is_default in vs.items():
         handler.add_vs_glyph(base, selector, is_default)
+
+    if gsub_gspec:
+        undo_gsub_win7_fix(handler.ttf)
 
     if outfont is None:
         outfont = fontfile[:-4] + "_new" + fontfile[-4:]
