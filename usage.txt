@@ -37,7 +37,7 @@ VSファイルは次のような形式のテキストファイルで、フォン
 &#x9F9C;&#xE0105;
 &#x9F9C;&#xE0106;
 
-・1行に1つ（ただし空行は無視されます）
+・1行に1つのVS（ただし空行は無視されます）
 
 ・（各行を）空白で区切った1列目は「基底文字」+「字形選択子」
 　（上の例では「&#x〜〜;」の記法（下記「■ひんと」を参照）を使っていますが、
@@ -52,9 +52,50 @@ VSファイルは次のような形式のテキストファイルで、フォン
 　非デフォルトVSに対してはそれぞれに新しい空のグリフが追加されます
 
 
+■GSUBテーブルへの置換規則の追加（version 3.0以降）
+
+テキストファイルの名前が「gsub」で始まっている場合は特別なファイル（GSUBファイルと呼びます）
+とみなされます
+GSUBファイルは次のような形式のテキストファイルで、フォントに追加したい置換規則を指定します：
+
+aalt 亀 龜龟
+aalt 龜 亀龟
+aalt 龟 亀龜
+
+aalt 丈          丈&#xE0101;丈&#xE0102;丈&#xE0103;
+aalt 丈&#xE0101; 丈丈&#xE0102;丈&#xE0103;
+aalt 丈&#xE0102; 丈丈&#xE0101;丈&#xE0103;
+aalt 丈&#xE0103; 丈丈&#xE0101;丈&#xE0102;
+
+cv01 a &#xF0000;
+
+GSUBファイルを用いてフォントに置換規則を追加することで、一部のソフトウェアで
+OpenType featureを指定したときの字形変化をサポートしたり、「字形パネル」のようなUIで
+異体字として字形同士を関連付けることができます
+
+・各行は空白で3列に区切られます（ただし空行は無視されます）
+
+・1列目は OpenType feature タグ
+　https://learn.microsoft.com/en-us/typography/opentype/spec/featurelist に定義されています
+
+・2列目は置換前のグリフ
+　単一のUnicode文字か、VSで指定します
+　すでにあるグリフでも大丈夫です
+　2つ以上のグリフを同時に指定はできません
+
+・3列目は置換後のグリフ
+　置換後のグリフが複数あれば、alternate substitution (lookup type = 3) になります
+
+　（上の例では（元のフォントには置換規則が無かったとする）、できあがったフォントでは
+　　aalt=2 の feature が有効化されるとテキスト「亀」の字形が「龟」に変化します）
+
+この機能は簡便にグリフの関連付けを行う用途を想定しているので、複雑な置換規則などを
+すでに持っているフォントに対して実行すると、フォントの機能が破壊される可能性があります
+
+
 ■ちゅうい
 
-・テキストファイル・VSファイルはUTF-8で作成してください
+・テキストファイル・VSファイル・GSUBファイルはUTF-8で作成してください
 
 ・ファイルの名前の先頭は「-」以外の文字にしてください
 
@@ -67,11 +108,13 @@ VSファイルは次のような形式のテキストファイルで、フォン
 　（元のフォントは変更されません）
 　例： 851tegaki_zatsu.ttf -> 851tegaki_zatsu_new.ttf
 
+・追加したグリフや置換規則を削除する機能はありません
+
 
 ■ひんと
 
-テキストファイル・VSファイル内の「&#x1F600;」や「&#128512;」は、U+1F600の文字として
-処理されます
+テキストファイル・VSファイル・GSUBファイル内の「&#x1F600;」や「&#128512;」は、
+U+1F600の文字として処理されます
 （16進数の1F600は、10進数の128512）
 （もちろんU+1F600に限りません）
 
@@ -85,6 +128,7 @@ VSファイルは次のような形式のテキストファイルで、フォン
 「DEBUG:addglyph.__main__:font file = なんとか.ttf」…処理対象のフォントファイル
 「DEBUG:addglyph.__main__:text file(s) = かん.txt, とか.txt」…処理対象のテキストファイル
 「DEBUG:addglyph.__main__:VS file(s) = vsほげほげ.txt」…処理対象のVSファイル
+「DEBUG:addglyph.__main__:GSUB file(s) = gsubぴよぴよ.txt」…処理対象のGSUBファイル
 「DEBUG:fontTools.ttLib〜〜〜〜〜〜」…ライブラリのデバッグ用メッセージ
 「INFO:addglyph.main:cmap subtable (format=12) created」…U+10000以上を追加するための処理をした
 「INFO:addglyph.main:cmap subtable (format=14) created」…VSを追加するための処理をした
@@ -113,10 +157,14 @@ VSファイルは次のような形式のテキストファイルで、フォン
 「ERROR:addglyph.inputfile:Error while loading text file 'うんぬん.txt'」…テキストファイルの読み込みに失敗しました
 （存在するテキストファイルを指定しているか確認してください）
 「ERROR:addglyph.inputfile:Error while loading VS text file 'vsかんぬん.txt'」…VSファイルの読み込みに失敗しました
-「VSFileSyntaxError: file 'vsなんとか.txt', line #: [エラーの内容]」…VSファイルの#行目の解析に失敗しました
+「addglyph.inputfile.VSFileSyntaxError: file 'vsなんとか.txt', line #: [エラーの内容]」…VSファイルの#行目の解析に失敗しました
 　「invalid number of columns: ##」…その行を空白で区切ると3つ以上ある
 　「invalid variation sequence length: ##」…1列目が「基底文字+字形選択子」になっていない
 　「invalid default variation sequence option」…2列目が「D」でない
+「addglyph.inputfile.GSUBFileSyntaxError: file 'vsなんとか.txt', line #: [エラーの内容]」…GSUBファイルの#行目の解析に失敗しました
+　「invalid number of columns: ##」…その行が3列に区切られていない
+　「invalid feature tag: ##」…OpenType feature タグの形式が不正
+　「invalid input glyph: ##」…置換前のグリフが1行に2つ以上指定されている
 「ERROR:addglyph.main:Error while loading font file」…フォントファイルの読み込みに失敗しました
 （存在する壊れていないフォントファイルを指定しているか確認してください）
 「ERROR:addglyph.main:Error while saving font file」…フォントファイルの書き込みに失敗しました
