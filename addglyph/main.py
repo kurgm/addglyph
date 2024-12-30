@@ -65,7 +65,7 @@ class FontCMap:
     def lookup_glyphname(self, codepoint: int) -> str | None:
         return cast("CMap", self._subt.cmap).get(codepoint)
 
-    def add_to_cmap(self, codepoint: int, glyphname: str) -> None:
+    def add(self, codepoint: int, glyphname: str) -> None:
         if codepoint < 0x10000 and self._sub4 is not None:
             cast("CMap", self._sub4.cmap).setdefault(codepoint, glyphname)
         cast("CMap", self._subt.cmap)[codepoint] = glyphname
@@ -122,14 +122,14 @@ class FontVSCmap:
     def lookup_glyphname(self, base: int, selector: int) -> str | None:
         return self._vs_in_font.get((base, selector))
 
-    def add_to_cmap_vs(self, base: int, selector: int, glyphname: str) -> None:
+    def add(self, base: int, selector: int, glyphname: str) -> None:
         cast("UVSMap", self._sub14.uvsDict).setdefault(selector, []).append(
             (base, glyphname)
         )
         self._vs_in_font[(base, selector)] = glyphname
 
 
-def get_glyphname(codepoint: int) -> str:
+def generate_glyphname(codepoint: int) -> str:
     if codepoint < 0x10000:
         glyphname = f"uni{codepoint:04X}"
     else:
@@ -161,9 +161,9 @@ def addglyph(
             logger.info(f"already in font: U+{codepoint:04X}")
             continue
 
-        glyphname = get_glyphname(codepoint)
+        glyphname = generate_glyphname(codepoint)
 
-        font_cmap.add_to_cmap(codepoint, glyphname)
+        font_cmap.add(codepoint, glyphname)
         adder.add_blank_glyph(glyphname, f"U+{codepoint:04X}")
 
     font_vs_cmap: FontVSCmap | None = None
@@ -183,20 +183,20 @@ def addglyph(
             # Reference: http://glyphwiki.org/wiki/User:emk
             glyphname = font_cmap.lookup_glyphname(base)
             if glyphname is None:
-                glyphname = get_glyphname(base)
+                glyphname = generate_glyphname(base)
 
-                font_cmap.add_to_cmap(base, glyphname)
+                font_cmap.add(base, glyphname)
                 adder.add_blank_glyph(
                     glyphname,
                     f"U+{base:04X} (base of U+{base:04X} U+{selector:04X})",
                 )
 
-            font_vs_cmap.add_to_cmap_vs(base, selector, glyphname)
+            font_vs_cmap.add(base, selector, glyphname)
             logger.info(f"added: U+{base:04X} U+{selector:04X} as default")
         else:
             glyphname = f"u{base:04X}u{selector:04X}"
 
-            font_vs_cmap.add_to_cmap_vs(base, selector, glyphname)
+            font_vs_cmap.add(base, selector, glyphname)
             adder.add_blank_glyph(
                 glyphname,
                 f"U+{base:04X} U+{selector:04X} as non-default",
