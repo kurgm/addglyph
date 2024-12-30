@@ -129,12 +129,14 @@ class FontVSCmap:
         self._vs_in_font[(base, selector)] = glyphname
 
 
-def generate_glyphname(codepoint: int) -> str:
+def generate_glyphname(codepoint: int, selector: int | None = None) -> str:
+    if selector is not None:
+        return f"u{codepoint:04X}u{selector:04X}"
+
     if codepoint < 0x10000:
-        glyphname = f"uni{codepoint:04X}"
+        return f"uni{codepoint:04X}"
     else:
-        glyphname = f"u{codepoint:04X}"
-    return glyphname
+        return f"u{codepoint:04X}"
 
 
 def addglyph(
@@ -194,7 +196,7 @@ def addglyph(
             font_vs_cmap.add(base, selector, glyphname)
             logger.info(f"added: U+{base:04X} U+{selector:04X} as default")
         else:
-            glyphname = f"u{base:04X}u{selector:04X}"
+            glyphname = generate_glyphname(base, selector)
 
             font_vs_cmap.add(base, selector, glyphname)
             adder.add_blank_glyph(
