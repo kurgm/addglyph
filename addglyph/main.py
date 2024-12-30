@@ -139,56 +139,52 @@ def generate_glyphname(codepoint: int, selector: int | None = None) -> str:
         return f"u{codepoint:04X}"
 
 
-def addglyph(
-    fontfile: str,
-    chars: Iterable[str],
-    vs: dict[tuple[int, int], bool] = {},
-    outfont: str | None = None,
-) -> None:
-    try:
-        ttf = TTFont(
-            fontfile,
-            recalcBBoxes=False,  # Adding blank glyphs will not change bboxes
-        )
-    except Exception as exc:
-        logger.error("Error while loading font file")
-        raise AddGlyphUserError() from exc
+class AddGlyphHandler:
+    def __init__(self, fontfile: str) -> None:
+        try:
+            self.ttf = TTFont(
+                fontfile,
+                # Adding blank glyphs will not change bboxes
+                recalcBBoxes=False,
+            )
+        except Exception as exc:
+            logger.error("Error while loading font file")
+            raise AddGlyphUserError() from exc
 
-    font_cmap = FontCMap(ttf)
-    adder = FontGlyphAdder(ttf)
+        self._font_cmap = FontCMap(self.ttf)
+        self._adder = FontGlyphAdder(self.ttf)
+        self._font_vs_cmap: FontVSCmap | None = None
 
-    for char in chars:
-        codepoint = ord(char)
-        if font_cmap.lookup_glyphname(codepoint) is not None:
+    def _get_font_vs_cmap(self) -> FontVSCmap:
+        if self._font_vs_cmap is None:
+            self._font_vs_cmap = FontVSCmap(self.ttf)
+        return self._font_vs_cmap
+
+    def add_glyph(self, codepoint: int) -> None:
+        if self._font_cmap.lookup_glyphname(codepoint) is not None:
             logger.info(f"already in font: U+{codepoint:04X}")
-            continue
+            return
 
         glyphname = generate_glyphname(codepoint)
 
-        font_cmap.add(codepoint, glyphname)
-        adder.add_blank_glyph(glyphname, f"U+{codepoint:04X}")
+        self._font_cmap.add(codepoint, glyphname)
+        self._adder.add_blank_glyph(glyphname, f"U+{codepoint:04X}")
 
-    font_vs_cmap: FontVSCmap | None = None
-
-    for seq, is_default in vs.items():
-        if font_vs_cmap is None:
-            font_vs_cmap = FontVSCmap(ttf)
-
-        base, selector = seq
-
+    def add_vs_glyph(self, base: int, selector: int, is_default: bool) -> None:
+        font_vs_cmap = self._get_font_vs_cmap()
         if font_vs_cmap.lookup_glyphname(base, selector) is not None:
             logger.info(f"already in font: U+{base:04X} U+{selector:04X}")
-            continue
+            return
 
         if is_default:
             # Windows 7 seems not to support default UVS table
             # Reference: http://glyphwiki.org/wiki/User:emk
-            glyphname = font_cmap.lookup_glyphname(base)
+            glyphname = self._font_cmap.lookup_glyphname(base)
             if glyphname is None:
                 glyphname = generate_glyphname(base)
 
-                font_cmap.add(base, glyphname)
-                adder.add_blank_glyph(
+                self._font_cmap.add(base, glyphname)
+                self._adder.add_blank_glyph(
                     glyphname,
                     f"U+{base:04X} (base of U+{base:04X} U+{selector:04X})",
                 )
@@ -199,33 +195,50 @@ def addglyph(
             glyphname = generate_glyphname(base, selector)
 
             font_vs_cmap.add(base, selector, glyphname)
-            adder.add_blank_glyph(
+            self._adder.add_blank_glyph(
                 glyphname,
                 f"U+{base:04X} U+{selector:04X} as non-default",
             )
 
-    os2 = cast("O_S_2f_2.table_O_S_2f_2", ttf["OS/2"])
+    def save(self, path: str) -> None:
+        os2 = cast("O_S_2f_2.table_O_S_2f_2", self.ttf["OS/2"])
 
-    old_uniranges: set[int] = os2.getUnicodeRanges()
-    new_uniranges: set[int] = os2.recalcUnicodeRanges(ttf)
-    # Retain old uniranges
-    os2.setUnicodeRanges(old_uniranges | new_uniranges)
+        old_uniranges: set[int] = os2.getUnicodeRanges()
+        new_uniranges: set[int] = os2.recalcUnicodeRanges(self.ttf)
+        # Retain old uniranges
+        os2.setUnicodeRanges(old_uniranges | new_uniranges)
 
-    old_codepages: set[int] = os2.getCodePageRanges()
-    new_codepages: set[int] = os2.recalcCodePageRanges(ttf)
-    # Retain old codepages
-    os2.setCodePageRanges(old_codepages | new_codepages)
+        old_codepages: set[int] = os2.getCodePageRanges()
+        new_codepages: set[int] = os2.recalcCodePageRanges(self.ttf)
+        # Retain old codepages
+        os2.setCodePageRanges(old_codepages | new_codepages)
 
-    logger.info(f"{adder.added_count} glyphs added!")
-    logger.info("saving...")
+        logger.info(f"{self._adder.added_count} glyphs added!")
+        logger.info("saving...")
+
+        try:
+            self.ttf.save(path, reorderTables=False)
+        except Exception as exc:
+            logger.error("Error while saving font file")
+            raise AddGlyphUserError() from exc
+
+        logger.info(f"saved successfully: {path}")
+
+
+def addglyph(
+    fontfile: str,
+    chars: Iterable[str],
+    vs: dict[tuple[int, int], bool] = {},
+    outfont: str | None = None,
+) -> None:
+    handler = AddGlyphHandler(fontfile)
+    for char in chars:
+        codepoint = ord(char)
+        handler.add_glyph(codepoint)
+    for (base, selector), is_default in vs.items():
+        handler.add_vs_glyph(base, selector, is_default)
 
     if outfont is None:
         outfont = fontfile[:-4] + "_new" + fontfile[-4:]
 
-    try:
-        ttf.save(outfont, reorderTables=False)
-    except Exception as exc:
-        logger.error("Error while saving font file")
-        raise AddGlyphUserError() from exc
-
-    logger.info(f"saved successfully: {outfont}")
+    handler.save(outfont)
