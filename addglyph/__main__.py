@@ -147,7 +147,7 @@ def main() -> None:
 try:
     main()
 except AddGlyphUserError as exc:
-    logger.exception("An error occurred", exc_info=exc.__cause__)
+    logger.exception("An error occurred", exc_info=exc.__cause__ or exc)
     sys.exit(2)
 except Exception:
     logger.exception("An unexpected error occurred!")
