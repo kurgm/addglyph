@@ -226,15 +226,28 @@ class AddGlyphHandler:
             self._font_vs_cmap = FontVSCmap(self.ttf)
         return self._font_vs_cmap
 
-    def add_glyph(self, codepoint: int) -> None:
-        if self._font_cmap.lookup_glyphname(codepoint) is not None:
-            logger.info(f"already in font: U+{codepoint:04X}")
-            return
+    def _ensure_glyph(
+        self, codepoint: int, description: str | None = None
+    ) -> tuple[str, bool]:
+        """Ensure that the glyph for the given codepoint exists in the font.
+
+        Returns a tuple of the glyph name and a boolean indicating whether the
+        glyph was newly added.
+        """
+        glyphname = self._font_cmap.lookup_glyphname(codepoint)
+        if glyphname is not None:
+            return glyphname, False
 
         glyphname = generate_glyphname(codepoint)
 
         self._font_cmap.add(codepoint, glyphname)
-        self._adder.add_blank_glyph(glyphname, f"U+{codepoint:04X}")
+        self._adder.add_blank_glyph(glyphname, description)
+        return glyphname, True
+
+    def add_glyph(self, codepoint: int) -> None:
+        _glyphname, added = self._ensure_glyph(codepoint, f"U+{codepoint:04X}")
+        if not added:
+            logger.info(f"already in font: U+{codepoint:04X}")
 
     def add_vs_glyph(self, base: int, selector: int, is_default: bool) -> None:
         font_vs_cmap = self._get_font_vs_cmap()
@@ -245,15 +258,9 @@ class AddGlyphHandler:
         if is_default:
             # Windows 7 seems not to support default UVS table
             # Reference: http://glyphwiki.org/wiki/User:emk
-            glyphname = self._font_cmap.lookup_glyphname(base)
-            if glyphname is None:
-                glyphname = generate_glyphname(base)
-
-                self._font_cmap.add(base, glyphname)
-                self._adder.add_blank_glyph(
-                    glyphname,
-                    f"U+{base:04X} (base of U+{base:04X} U+{selector:04X})",
-                )
+            glyphname, _added = self._ensure_glyph(
+                base, f"U+{base:04X} (base of U+{base:04X} U+{selector:04X})"
+            )
 
             font_vs_cmap.add(base, selector, glyphname)
             logger.info(f"added: U+{base:04X} U+{selector:04X} as default")
@@ -272,13 +279,7 @@ class AddGlyphHandler:
 
         base, selector = gspec
         if selector is None:
-            glyphname = self._font_cmap.lookup_glyphname(base)
-            if glyphname is not None:
-                return glyphname
-
-            glyphname = generate_glyphname(base)
-            self._font_cmap.add(base, glyphname)
-            self._adder.add_blank_glyph(glyphname, f"U+{base:04X}")
+            glyphname, _added = self._ensure_glyph(base, f"U+{base:04X}")
             return glyphname
 
         font_vs_cmap = self._get_font_vs_cmap()
