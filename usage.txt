@@ -167,6 +167,8 @@ U+1F600の文字として処理されます
 　「invalid input glyph: ##」…置換前のグリフが1行に2つ以上指定されている
 「ERROR:addglyph.main:Error while loading font file」…フォントファイルの読み込みに失敗しました
 （存在する壊れていないフォントファイルを指定しているか確認してください）
+「addglyph.error.AddGlyphUserError: Glyph not found: U+XXXX U+YYYYY」…GSUBファイルに指定されているVSがフォントに存在しない
+（VSファイルを使って追加してください（GSUBファイルと同時にVSファイルを指定することができます））
 「ERROR:addglyph.main:Error while saving font file」…フォントファイルの書き込みに失敗しました
 （書き込みの権限があるか、ディスクに空き容量があるか、ファイルが使用中でないか確認して下さい）
 「ERROR:addglyph.__main__:An unexpected error occurred!」「ERROR:addglyph.__main__:(please report this to @kurgm)」

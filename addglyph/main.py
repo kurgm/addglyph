@@ -266,6 +266,30 @@ class AddGlyphHandler:
                 f"U+{base:04X} U+{selector:04X} as non-default",
             )
 
+    def get_glyphname_from_gspec(self, gspec: GlyphSpec) -> str:
+        if isinstance(gspec, int):
+            return self.ttf.getGlyphName(gspec)
+
+        base, selector = gspec
+        if selector is None:
+            glyphname = self._font_cmap.lookup_glyphname(base)
+            if glyphname is not None:
+                return glyphname
+
+            glyphname = generate_glyphname(base)
+            self._font_cmap.add(base, glyphname)
+            self._adder.add_blank_glyph(glyphname, f"U+{base:04X}")
+            return glyphname
+
+        font_vs_cmap = self._get_font_vs_cmap()
+        glyphname = font_vs_cmap.lookup_glyphname(base, selector)
+        if glyphname is not None:
+            return glyphname
+
+        raise AddGlyphUserError(
+            f"Glyph not found: U+{base:04X} U+{selector:04X}"
+        )
+
     def save(self, path: str) -> None:
         os2 = cast("O_S_2f_2.table_O_S_2f_2", self.ttf["OS/2"])
 
@@ -307,6 +331,16 @@ def addglyph(
 
     if gsub_gspec:
         undo_gsub_win7_fix(handler.ttf)
+
+    gsub_glyphname: dict[str, dict[str, list[str]]] = {}
+    for feature_tag, gspec_list in gsub_gspec.items():
+        gsub_glyphname[feature_tag] = {}
+        for input_glyph, alternate_glyph in gspec_list:
+            input_name = handler.get_glyphname_from_gspec(input_glyph)
+            alternate_name = handler.get_glyphname_from_gspec(alternate_glyph)
+            gsub_glyphname[feature_tag].setdefault(input_name, []).append(
+                alternate_name
+            )
 
     if outfont is None:
         outfont = fontfile[:-4] + "_new" + fontfile[-4:]
