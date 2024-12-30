@@ -22,29 +22,58 @@ logger = logging.getLogger(__name__)
 apply_monkey_patch()
 
 
-def add_blank_glyph(
-    glyphname: str,
-    hmtx: _h_m_t_x.table__h_m_t_x,
-    vmtx: _v_m_t_x.table__v_m_t_x,
-    glyf: _g_l_y_f.table__g_l_y_f,
-) -> None:
-    hmtx[glyphname] = vmtx[glyphname] = (1024, 0)
+class FontGlyphAdder:
+    def __init__(self, ttf: TTFont) -> None:
+        self._hmtx = cast("_h_m_t_x.table__h_m_t_x", ttf["hmtx"])
+        self._vmtx = cast("_v_m_t_x.table__v_m_t_x", ttf["vmtx"])
+        self._glyf = cast("_g_l_y_f.table__g_l_y_f", ttf["glyf"])
+        self._glyf.padding = 4
 
-    glyph = _g_l_y_f.Glyph()
-    glyph.xMin = glyph.yMin = glyph.xMax = glyph.yMax = 0
-    glyf[glyphname] = glyph
+        self.added_count = 0
+
+    def add_blank_glyph(
+        self, glyphname: str, description: str | None = None
+    ) -> None:
+        self._hmtx[glyphname] = self._vmtx[glyphname] = (1024, 0)
+
+        glyph = _g_l_y_f.Glyph()
+        glyph.xMin = glyph.yMin = glyph.xMax = glyph.yMax = 0
+        self._glyf[glyphname] = glyph
+
+        self.added_count += 1
+        logger.info(f"added: {description or glyphname}")
 
 
-def get_cmap(ttf: TTFont, vs: bool = False):
-    cmap = cast("_c_m_a_p.table__c_m_a_p", ttf["cmap"])
-    sub4: _c_m_a_p.cmap_format_4 | None = cmap.getcmap(
-        platformID=3, platEncID=1
-    )
-    subt: _c_m_a_p.cmap_format_12 | None = cmap.getcmap(
-        platformID=3, platEncID=10
-    )
-    if subt is None:
-        assert sub4 is not None, "cmap subtable (format=4) not found"
+class FontCMap:
+    def __init__(self, ttf: TTFont) -> None:
+        cmap = cast("_c_m_a_p.table__c_m_a_p", ttf["cmap"])
+        self._sub4 = cast(
+            "_c_m_a_p.cmap_format_4 | None",
+            cmap.getcmap(platformID=3, platEncID=1),
+        )
+        subt = cast(
+            "_c_m_a_p.cmap_format_12 | None",
+            cmap.getcmap(platformID=3, platEncID=10),
+        )
+        if subt is None:
+            assert self._sub4 is not None, "cmap subtable (format=4) not found"
+            subt = self._create_subt_from_sub4(self._sub4)
+            cmap.tables.append(subt)
+            logger.info("cmap subtable (format=12) created")
+        self._subt: _c_m_a_p.cmap_format_12 = subt
+
+    def lookup_glyphname(self, codepoint: int) -> str | None:
+        return cast("CMap", self._subt.cmap).get(codepoint)
+
+    def add(self, codepoint: int, glyphname: str) -> None:
+        if codepoint < 0x10000 and self._sub4 is not None:
+            cast("CMap", self._sub4.cmap).setdefault(codepoint, glyphname)
+        cast("CMap", self._subt.cmap)[codepoint] = glyphname
+
+    @staticmethod
+    def _create_subt_from_sub4(
+        sub4: _c_m_a_p.cmap_format_4,
+    ) -> _c_m_a_p.cmap_format_12:
         subt = cast(
             "_c_m_a_p.cmap_format_12", _c_m_a_p.CmapSubtable.newSubtable(12)
         )
@@ -58,55 +87,56 @@ def get_cmap(ttf: TTFont, vs: bool = False):
         if not hasattr(subt, "cmap"):
             subt.cmap = cast("CMap", {})
         subt.cmap.update(cast("CMap", sub4.cmap))
-        cmap.tables.append(subt)
-        logger.info("cmap subtable (format=12) created")
+        return subt
 
-    sub14: _c_m_a_p.cmap_format_14 | None = cmap.getcmap(
-        platformID=0, platEncID=5
-    )
-    if vs and sub14 is None:
+
+class FontVSCmap:
+    def __init__(self, ttf: TTFont) -> None:
+        cmap = cast("_c_m_a_p.table__c_m_a_p", ttf["cmap"])
         sub14 = cast(
-            "_c_m_a_p.cmap_format_14", _c_m_a_p.CmapSubtable.newSubtable(14)
+            "_c_m_a_p.cmap_format_14 | None",
+            cmap.getcmap(platformID=0, platEncID=5),
         )
-        sub14.platformID = 0  # type: ignore
-        sub14.platEncID = 5  # type: ignore
-        sub14.format = 14
-        sub14.length = 0  # will be recalculated by compiler
-        sub14.numVarSelectorRecords = 0  # will be recalculated by compiler
-        sub14.language = 0xFF
-        sub14.cmap = cast("CMap", {})
-        sub14.uvsDict = cast("UVSMap", {})
-        cmap.tables.append(sub14)
-        logger.info("cmap subtable (format=14) created")
+        if sub14 is None:
+            sub14 = cast(
+                "_c_m_a_p.cmap_format_14",
+                _c_m_a_p.CmapSubtable.newSubtable(14),
+            )
+            sub14.platformID = 0  # type: ignore
+            sub14.platEncID = 5  # type: ignore
+            sub14.format = 14
+            sub14.length = 0  # will be recalculated by compiler
+            sub14.numVarSelectorRecords = 0  # will be recalculated by compiler
+            sub14.language = 0xFF
+            sub14.cmap = cast("CMap", {})
+            sub14.uvsDict = cast("UVSMap", {})
+            cmap.tables.append(sub14)
+            logger.info("cmap subtable (format=14) created")
+        self._sub14 = sub14
+        self._vs_in_font = {
+            (uv, selector): gname
+            for selector, uvList in cast("UVSMap", sub14.uvsDict).items()
+            for uv, gname in uvList
+        }
 
-    return sub4, subt, sub14
+    def lookup_glyphname(self, base: int, selector: int) -> str | None:
+        return self._vs_in_font.get((base, selector))
+
+    def add(self, base: int, selector: int, glyphname: str) -> None:
+        cast("UVSMap", self._sub14.uvsDict).setdefault(selector, []).append(
+            (base, glyphname)
+        )
+        self._vs_in_font[(base, selector)] = glyphname
 
 
-def get_glyphname(codepoint: int) -> str:
+def generate_glyphname(codepoint: int, selector: int | None = None) -> str:
+    if selector is not None:
+        return f"u{codepoint:04X}u{selector:04X}"
+
     if codepoint < 0x10000:
-        glyphname = f"uni{codepoint:04X}"
+        return f"uni{codepoint:04X}"
     else:
-        glyphname = f"u{codepoint:04X}"
-    return glyphname
-
-
-def add_to_cmap(
-    codepoint: int,
-    glyphname: str,
-    sub4: _c_m_a_p.cmap_format_4 | None,
-    subt: _c_m_a_p.cmap_format_12,
-) -> None:
-    if codepoint < 0x10000 and sub4 is not None:
-        cast("CMap", sub4.cmap).setdefault(codepoint, glyphname)
-    cast("CMap", subt.cmap)[codepoint] = glyphname
-
-
-def add_to_cmap_vs(
-    base: int, selector: int, glyphname: str, sub14: _c_m_a_p.cmap_format_14
-) -> None:
-    cast("UVSMap", sub14.uvsDict).setdefault(selector, []).append(
-        (base, glyphname)
-    )
+        return f"u{codepoint:04X}"
 
 
 def addglyph(
@@ -124,70 +154,55 @@ def addglyph(
         logger.error("Error while loading font file")
         raise AddGlyphUserError() from exc
 
-    sub4, subt, sub14 = get_cmap(ttf, vs=bool(vs))
-
-    subt.cmap = cast("CMap", subt.cmap)
-
-    hmtx = cast("_h_m_t_x.table__h_m_t_x", ttf["hmtx"])
-    vmtx = cast("_v_m_t_x.table__v_m_t_x", ttf["vmtx"])
-    glyf = cast("_g_l_y_f.table__g_l_y_f", ttf["glyf"])
-    glyf.padding = 4
-
-    added_count = 0
+    font_cmap = FontCMap(ttf)
+    adder = FontGlyphAdder(ttf)
 
     for char in chars:
         codepoint = ord(char)
-        if codepoint in subt.cmap:
+        if font_cmap.lookup_glyphname(codepoint) is not None:
             logger.info(f"already in font: U+{codepoint:04X}")
             continue
 
-        glyphname = get_glyphname(codepoint)
+        glyphname = generate_glyphname(codepoint)
 
-        add_to_cmap(codepoint, glyphname, sub4, subt)
-        add_blank_glyph(glyphname, hmtx, vmtx, glyf)
+        font_cmap.add(codepoint, glyphname)
+        adder.add_blank_glyph(glyphname, f"U+{codepoint:04X}")
 
-        logger.info(f"added: U+{codepoint:04X}")
-        added_count += 1
-
-    vs_in_font: set[tuple[int, int]] = set()
-    if sub14 is not None and vs:
-        for selector, uvList in cast("UVSMap", sub14.uvsDict).items():
-            vs_in_font.update((uv, selector) for uv, gname in uvList)
+    font_vs_cmap: FontVSCmap | None = None
 
     for seq, is_default in vs.items():
-        assert sub14 is not None  # sub14 is None => vs == {}
+        if font_vs_cmap is None:
+            font_vs_cmap = FontVSCmap(ttf)
+
         base, selector = seq
 
-        if seq in vs_in_font:
+        if font_vs_cmap.lookup_glyphname(base, selector) is not None:
             logger.info(f"already in font: U+{base:04X} U+{selector:04X}")
             continue
 
         if is_default:
             # Windows 7 seems not to support default UVS table
             # Reference: http://glyphwiki.org/wiki/User:emk
-            if base in subt.cmap:
-                glyphname = subt.cmap[base]
-            else:
-                glyphname = get_glyphname(base)
+            glyphname = font_cmap.lookup_glyphname(base)
+            if glyphname is None:
+                glyphname = generate_glyphname(base)
 
-                add_to_cmap(base, glyphname, sub4, subt)
-                add_blank_glyph(glyphname, hmtx, vmtx, glyf)
+                font_cmap.add(base, glyphname)
+                adder.add_blank_glyph(
+                    glyphname,
+                    f"U+{base:04X} (base of U+{base:04X} U+{selector:04X})",
+                )
 
-                logger.info(f"added base character: U+{base:04X}")
-                added_count += 1
-
-            add_to_cmap_vs(base, selector, glyphname, sub14)
+            font_vs_cmap.add(base, selector, glyphname)
             logger.info(f"added: U+{base:04X} U+{selector:04X} as default")
         else:
-            glyphname = f"u{base:04X}u{selector:04X}"
+            glyphname = generate_glyphname(base, selector)
 
-            add_to_cmap_vs(base, selector, glyphname, sub14)
-            add_blank_glyph(glyphname, hmtx, vmtx, glyf)
-
-            logger.info(f"added: U+{base:04X} U+{selector:04X} as non-default")
-            added_count += 1
-
-        vs_in_font.add(seq)
+            font_vs_cmap.add(base, selector, glyphname)
+            adder.add_blank_glyph(
+                glyphname,
+                f"U+{base:04X} U+{selector:04X} as non-default",
+            )
 
     os2 = cast("O_S_2f_2.table_O_S_2f_2", ttf["OS/2"])
 
@@ -201,7 +216,7 @@ def addglyph(
     # Retain old codepages
     os2.setCodePageRanges(old_codepages | new_codepages)
 
-    logger.info(f"{added_count} glyphs added!")
+    logger.info(f"{adder.added_count} glyphs added!")
     logger.info("saving...")
 
     if outfont is None:

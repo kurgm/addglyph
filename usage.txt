@@ -91,7 +91,6 @@ VSファイルは次のような形式のテキストファイルで、フォン
 「～～UserWarning: 'created' timestamp seems very low～～～」…たぶん無視してok
 「INFO:addglyph.main:added: U+xxxx」…U+xxxxをフォントに追加した
 「INFO:addglyph.main:already in font: U+xxxx」…U+xxxxは既にフォントに入っている
-「INFO:addglyph.main:added base character: U+xxxx」…VSの基底文字U+xxxxをフォントに追加した
 「INFO:addglyph.main:added: U+xxxx U+yyyy as default」
 　…デフォルトVS <U+xxxx U+yyyy>をフォントに追加した
 「INFO:addglyph.main:added: U+xxxx U+yyyy as non-default」
