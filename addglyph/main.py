@@ -22,17 +22,26 @@ logger = logging.getLogger(__name__)
 apply_monkey_patch()
 
 
-def add_blank_glyph(
-    glyphname: str,
-    hmtx: _h_m_t_x.table__h_m_t_x,
-    vmtx: _v_m_t_x.table__v_m_t_x,
-    glyf: _g_l_y_f.table__g_l_y_f,
-) -> None:
-    hmtx[glyphname] = vmtx[glyphname] = (1024, 0)
+class FontGlyphAdder:
+    def __init__(self, ttf: TTFont) -> None:
+        self._hmtx = cast("_h_m_t_x.table__h_m_t_x", ttf["hmtx"])
+        self._vmtx = cast("_v_m_t_x.table__v_m_t_x", ttf["vmtx"])
+        self._glyf = cast("_g_l_y_f.table__g_l_y_f", ttf["glyf"])
+        self._glyf.padding = 4
 
-    glyph = _g_l_y_f.Glyph()
-    glyph.xMin = glyph.yMin = glyph.xMax = glyph.yMax = 0
-    glyf[glyphname] = glyph
+        self.added_count = 0
+
+    def add_blank_glyph(
+        self, glyphname: str, description: str | None = None
+    ) -> None:
+        self._hmtx[glyphname] = self._vmtx[glyphname] = (1024, 0)
+
+        glyph = _g_l_y_f.Glyph()
+        glyph.xMin = glyph.yMin = glyph.xMax = glyph.yMax = 0
+        self._glyf[glyphname] = glyph
+
+        self.added_count += 1
+        logger.info(f"added: {description or glyphname}")
 
 
 class FontCMap:
@@ -144,13 +153,7 @@ def addglyph(
         raise AddGlyphUserError() from exc
 
     font_cmap = FontCMap(ttf)
-
-    hmtx = cast("_h_m_t_x.table__h_m_t_x", ttf["hmtx"])
-    vmtx = cast("_v_m_t_x.table__v_m_t_x", ttf["vmtx"])
-    glyf = cast("_g_l_y_f.table__g_l_y_f", ttf["glyf"])
-    glyf.padding = 4
-
-    added_count = 0
+    adder = FontGlyphAdder(ttf)
 
     for char in chars:
         codepoint = ord(char)
@@ -161,10 +164,7 @@ def addglyph(
         glyphname = get_glyphname(codepoint)
 
         font_cmap.add_to_cmap(codepoint, glyphname)
-        add_blank_glyph(glyphname, hmtx, vmtx, glyf)
-
-        logger.info(f"added: U+{codepoint:04X}")
-        added_count += 1
+        adder.add_blank_glyph(glyphname, f"U+{codepoint:04X}")
 
     font_vs_cmap: FontVSCmap | None = None
 
@@ -186,10 +186,10 @@ def addglyph(
                 glyphname = get_glyphname(base)
 
                 font_cmap.add_to_cmap(base, glyphname)
-                add_blank_glyph(glyphname, hmtx, vmtx, glyf)
-
-                logger.info(f"added base character: U+{base:04X}")
-                added_count += 1
+                adder.add_blank_glyph(
+                    glyphname,
+                    f"U+{base:04X} (base of U+{base:04X} U+{selector:04X})",
+                )
 
             font_vs_cmap.add_to_cmap_vs(base, selector, glyphname)
             logger.info(f"added: U+{base:04X} U+{selector:04X} as default")
@@ -197,10 +197,10 @@ def addglyph(
             glyphname = f"u{base:04X}u{selector:04X}"
 
             font_vs_cmap.add_to_cmap_vs(base, selector, glyphname)
-            add_blank_glyph(glyphname, hmtx, vmtx, glyf)
-
-            logger.info(f"added: U+{base:04X} U+{selector:04X} as non-default")
-            added_count += 1
+            adder.add_blank_glyph(
+                glyphname,
+                f"U+{base:04X} U+{selector:04X} as non-default",
+            )
 
     os2 = cast("O_S_2f_2.table_O_S_2f_2", ttf["OS/2"])
 
@@ -214,7 +214,7 @@ def addglyph(
     # Retain old codepages
     os2.setCodePageRanges(old_codepages | new_codepages)
 
-    logger.info(f"{added_count} glyphs added!")
+    logger.info(f"{adder.added_count} glyphs added!")
     logger.info("saving...")
 
     if outfont is None:
