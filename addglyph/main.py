@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
 
 from fontTools.ttLib import TTFont
@@ -9,7 +9,7 @@ from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f
 from fontTools.ttLib.tables import otTables as otTables_
 
 from .error import AddGlyphUserError
-from .inputfile import GlyphSpec
+from .inputfile import GlyphSpec, GSUBSpec
 from .monkeypatch import apply_monkey_patch
 
 if TYPE_CHECKING:
@@ -636,8 +636,8 @@ class AddGlyphHandler:
 def addglyph(
     fontfile: str,
     chars: Iterable[str],
-    vs: dict[tuple[int, int], bool] = {},
-    gsub_gspec: Mapping[str, Iterable[tuple[GlyphSpec, GlyphSpec]]] = {},
+    vs: dict[tuple[int, int], bool],
+    gsub_gspec: GSUBSpec,
     outfont: str | None = None,
 ) -> None:
     handler = AddGlyphHandler(fontfile)
@@ -650,7 +650,7 @@ def addglyph(
     if gsub_gspec:
         undo_gsub_win7_fix(handler.ttf)
 
-    for feature_tag, gspec_list in gsub_gspec.items():
+    for feature_tag, gspec_list in gsub_gspec.entries_by_tag.items():
         alternate_by_input: dict[str, list[str]] = {}
         for input_glyph, alternate_glyph in gspec_list:
             input_name = handler.get_glyphname_from_gspec(input_glyph)
