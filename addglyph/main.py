@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f
+from fontTools.ttLib.tables import otTables as otTables_
 
 from .error import AddGlyphUserError
 from .inputfile import GlyphSpec
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 apply_monkey_patch()
+otTables = cast("Any", otTables_)
 
 
 class FontGlyphAdder:
@@ -205,6 +207,284 @@ def undo_gsub_win7_fix(ttf: TTFont) -> None:
         logger.debug("Removed the dummy feature from the GSUB table")
 
 
+class GSUBRuleAdder:
+    class GSUBFeatureRuleAdder:
+        def __init__(
+            self, gsub: G_S_U_B_.table_G_S_U_B_, feature_index: int
+        ) -> None:
+            self._gsub = gsub
+            feature_record = gsub.table.FeatureList.FeatureRecord[
+                feature_index
+            ]
+            self._feature_tag = feature_record.FeatureTag
+            self._feature = feature_record.Feature
+            self._lookup_indices = cast(
+                "list[int]", self._feature.LookupListIndex
+            )
+            self._default_lookup_single_subtable: (
+                otTables_.SingleSubst | None
+            ) = None
+            self._default_lookup_alternate_subtable: (
+                otTables_.AlternateSubst | None
+            ) = None
+
+        def _add_lookup(self, lookup) -> int:
+            lookup_index = len(self._gsub.table.LookupList.Lookup)
+            self._gsub.table.LookupList.Lookup.append(lookup)
+            self._gsub.table.LookupList.LookupCount += 1
+            self._lookup_indices.append(lookup_index)
+            self._feature.LookupCount += 1
+            return lookup_index
+
+        def _get_default_lookup_single(self):
+            for lookup_index in self._lookup_indices:
+                lookup = self._gsub.table.LookupList.Lookup[lookup_index]
+                if lookup.LookupType == 1:
+                    return lookup
+
+            lookup = otTables.Lookup()
+            lookup.LookupType = 1
+            lookup.LookupFlag = 0
+            lookup.SubTableCount = 0
+            lookup.SubTable = []
+            self._add_lookup(lookup)
+            return lookup
+
+        def _get_default_lookup_single_subtable(self) -> otTables_.SingleSubst:
+            if self._default_lookup_single_subtable is not None:
+                return self._default_lookup_single_subtable
+
+            lookup = self._get_default_lookup_single()
+            if lookup.SubTable:
+                subtable = lookup.SubTable[0]
+                assert isinstance(subtable, otTables_.SingleSubst)
+            else:
+                subtable = otTables.SingleSubst()
+                subtable.mapping = {}
+                lookup.SubTable.append(subtable)
+                lookup.SubTableCount += 1
+            self._default_lookup_single_subtable = subtable
+            return subtable
+
+        def _get_default_lookup_alternate(self):
+            for lookup_index in self._lookup_indices:
+                lookup = self._gsub.table.LookupList.Lookup[lookup_index]
+                if lookup.LookupType == 3:
+                    return lookup
+
+            lookup = otTables.Lookup()
+            lookup.LookupType = 3
+            lookup.LookupFlag = 0
+            lookup.SubTableCount = 0
+            lookup.SubTable = []
+            self._add_lookup(lookup)
+            return lookup
+
+        def _get_default_lookup_alternate_subtable(
+            self,
+        ) -> otTables_.AlternateSubst:
+            if self._default_lookup_alternate_subtable is not None:
+                return self._default_lookup_alternate_subtable
+
+            lookup = self._get_default_lookup_alternate()
+            if lookup.SubTable:
+                subtable = lookup.SubTable[0]
+                assert isinstance(subtable, otTables_.AlternateSubst)
+            else:
+                subtable = otTables.AlternateSubst()
+                subtable.alternates = {}
+                lookup.SubTable.append(subtable)
+                lookup.SubTableCount += 1
+            self._default_lookup_alternate_subtable = subtable
+            return subtable
+
+        @staticmethod
+        def _merge_alternates(
+            left: list[str], right: Iterable[str]
+        ) -> list[str]:
+            return left + [e for e in dict.fromkeys(right) if e not in left]
+
+        def _try_add_rule_existing_single(
+            self, target: str, replacements: list[str]
+        ) -> list[str]:
+            for lookup_index in self._lookup_indices:
+                lookup = self._gsub.table.LookupList.Lookup[lookup_index]
+                if lookup.LookupType != 1:
+                    continue
+                for subtable in lookup.SubTable:
+                    assert isinstance(subtable, otTables_.SingleSubst)
+                    mapping = cast("dict[str, str]", subtable.mapping)
+                    if target in mapping:
+                        replacements = self._merge_alternates(
+                            [mapping[target]], replacements
+                        )
+                        if replacements == [mapping[target]]:
+                            # All new alternates are already in the mapping,
+                            # so we are done
+                            logger.info(
+                                f"already in font: {self._feature_tag}: "
+                                f"{target} -> {', '.join(replacements)}"
+                            )
+                            return []
+                        del mapping[target]
+                        return replacements
+
+            return replacements
+
+        def _try_add_rule_existing_alternate(
+            self, target: str, replacements: list[str]
+        ) -> list[str]:
+            for lookup_index in self._lookup_indices:
+                lookup = self._gsub.table.LookupList.Lookup[lookup_index]
+                if lookup.LookupType != 3:
+                    continue
+                for subtable in lookup.SubTable:
+                    assert isinstance(subtable, otTables_.AlternateSubst)
+                    alternates = cast(
+                        "dict[str, list[str]]", subtable.alternates
+                    )
+                    if target in alternates:
+                        existing = alternates[target]
+                        new_alternates = self._merge_alternates(
+                            existing, replacements
+                        )
+                        alternates[target] = new_alternates
+                        if existing != new_alternates:
+                            logger.info(
+                                f"added: {self._feature_tag}: "
+                                f"{target} -> {', '.join(new_alternates)}"
+                            )
+                        else:
+                            logger.info(
+                                f"already in font: {self._feature_tag}: "
+                                f"{target} -> {', '.join(new_alternates)}"
+                            )
+                        return []
+
+            return replacements
+
+        def add_rule(self, target: str, replacements_: Iterable[str]) -> None:
+            replacements = list(replacements_)
+            replacements = self._try_add_rule_existing_single(
+                target, replacements
+            )
+            if not replacements:
+                return
+            replacements = self._try_add_rule_existing_alternate(
+                target, replacements
+            )
+            if not replacements:
+                return
+            if len(replacements) == 1:
+                subtable = self._get_default_lookup_single_subtable()
+                mapping = cast("dict[str, str]", subtable.mapping)
+                mapping[target] = replacements[0]
+            else:
+                subtable = self._get_default_lookup_alternate_subtable()
+                alternates = cast("dict[str, list[str]]", subtable.alternates)
+                alternates[target] = replacements
+
+            logger.info(
+                f"added: {self._feature_tag}: "
+                f"{target} -> {', '.join(replacements)}"
+            )
+
+    def __init__(self, ttf: TTFont) -> None:
+        self._gsub = cast("G_S_U_B_.table_G_S_U_B_", ttf["GSUB"])
+        self._feature_indices_by_tag: dict[str, set[int]] = {}
+        self._feature_adders: dict[
+            int, GSUBRuleAdder.GSUBFeatureRuleAdder
+        ] = {}
+
+        self._dflt_langsys = self._get_dflt_langsys(self._gsub)
+
+    @staticmethod
+    def _get_dflt_langsys(gsub: G_S_U_B_.table_G_S_U_B_):
+        for script_record in gsub.table.ScriptList.ScriptRecord:
+            if script_record.ScriptTag == "DFLT":
+                dflt_langsys = script_record.Script.DefaultLangSys
+                assert dflt_langsys is not None
+                return dflt_langsys
+        else:
+            dflt_script_record = otTables.ScriptRecord()
+            dflt_script_record.ScriptTag = "DFLT"
+            dflt_script_record.Script = otTables.Script()
+            dflt_langsys = otTables.LangSys()
+            dflt_langsys.LookupOrder = None
+            dflt_langsys.ReqFeatureIndex = 0xFFFF
+            dflt_langsys.FeatureCount = 0
+            dflt_langsys.FeatureIndex = []
+            dflt_script_record.Script.DefaultLangSys = dflt_langsys
+            dflt_script_record.Script.LangSysCount = 0
+            dflt_script_record.Script.LangSysRecord = []
+            gsub.table.ScriptList.ScriptRecord.append(dflt_script_record)
+            gsub.table.ScriptList.ScriptCount += 1
+            return dflt_langsys
+
+    def _ensure_dflt_feature(self, feature_tag: str) -> None:
+        if not any(
+            self._gsub.table.FeatureList.FeatureRecord[
+                feature_index
+            ].FeatureTag
+            == feature_tag
+            for feature_index in self._dflt_langsys.FeatureIndex
+        ):
+            feature_record = otTables.FeatureRecord()
+            feature_record.FeatureTag = feature_tag
+            feature_record.Feature = otTables.Feature()
+            feature_record.Feature.FeatureParams = None
+            feature_record.Feature.LookupCount = 0
+            feature_record.Feature.LookupListIndex = []
+            feature_index = len(self._gsub.table.FeatureList.FeatureRecord)
+            self._gsub.table.FeatureList.FeatureRecord.append(feature_record)
+            self._gsub.table.FeatureList.FeatureCount += 1
+            self._dflt_langsys.FeatureIndex.append(feature_index)
+            self._dflt_langsys.FeatureCount += 1
+
+    def _get_feature_indices(self, feature_tag: str) -> set[int]:
+        if feature_tag in self._feature_indices_by_tag:
+            return self._feature_indices_by_tag[feature_tag]
+
+        self._ensure_dflt_feature(feature_tag)
+        feature_indices = {
+            feature_index
+            for script_record in self._gsub.table.ScriptList.ScriptRecord
+            for langsys in [
+                script_record.Script.DefaultLangSys,
+                *(
+                    langsys_record.LangSys
+                    for langsys_record in script_record.Script.LangSysRecord
+                ),
+            ]
+            if langsys is not None
+            for feature_index in langsys.FeatureIndex
+            if self._gsub.table.FeatureList.FeatureRecord[
+                feature_index
+            ].FeatureTag
+            == feature_tag
+        }
+        self._feature_indices_by_tag[feature_tag] = feature_indices
+        return feature_indices
+
+    def _get_feature_adder(
+        self, feature_index: int
+    ) -> GSUBRuleAdder.GSUBFeatureRuleAdder:
+        if feature_index not in self._feature_adders:
+            self._feature_adders[feature_index] = (
+                GSUBRuleAdder.GSUBFeatureRuleAdder(self._gsub, feature_index)
+            )
+        return self._feature_adders[feature_index]
+
+    def add_rule(
+        self, feature_tag: str, target: str, replacements: list[str]
+    ) -> None:
+        feature_indices = self._get_feature_indices(feature_tag)
+        for feature_index in feature_indices:
+            self._get_feature_adder(feature_index).add_rule(
+                target, replacements
+            )
+
+
 class AddGlyphHandler:
     def __init__(self, fontfile: str) -> None:
         try:
@@ -220,6 +500,7 @@ class AddGlyphHandler:
         self._font_cmap = FontCMap(self.ttf)
         self._adder = FontGlyphAdder(self.ttf)
         self._font_vs_cmap: FontVSCmap | None = None
+        self._gsub_adder: GSUBRuleAdder | None = None
 
     def _get_font_vs_cmap(self) -> FontVSCmap:
         if self._font_vs_cmap is None:
@@ -291,6 +572,17 @@ class AddGlyphHandler:
             f"Glyph not found: U+{base:04X} U+{selector:04X}"
         )
 
+    def _get_gsub_adder(self) -> GSUBRuleAdder:
+        if self._gsub_adder is None:
+            self._gsub_adder = GSUBRuleAdder(self.ttf)
+        return self._gsub_adder
+
+    def add_gsub_rules(
+        self, feature_tag: str, target: str, replacements: list[str]
+    ) -> None:
+        gsub_adder = self._get_gsub_adder()
+        gsub_adder.add_rule(feature_tag, target, replacements)
+
     def save(self, path: str) -> None:
         os2 = cast("O_S_2f_2.table_O_S_2f_2", self.ttf["OS/2"])
 
@@ -333,15 +625,16 @@ def addglyph(
     if gsub_gspec:
         undo_gsub_win7_fix(handler.ttf)
 
-    gsub_glyphname: dict[str, dict[str, list[str]]] = {}
     for feature_tag, gspec_list in gsub_gspec.items():
-        gsub_glyphname[feature_tag] = {}
+        alternate_by_input: dict[str, list[str]] = {}
         for input_glyph, alternate_glyph in gspec_list:
             input_name = handler.get_glyphname_from_gspec(input_glyph)
             alternate_name = handler.get_glyphname_from_gspec(alternate_glyph)
-            gsub_glyphname[feature_tag].setdefault(input_name, []).append(
+            alternate_by_input.setdefault(input_name, []).append(
                 alternate_name
             )
+        for input_name, alternate_list in alternate_by_input.items():
+            handler.add_gsub_rules(feature_tag, input_name, alternate_list)
 
     if outfont is None:
         outfont = fontfile[:-4] + "_new" + fontfile[-4:]
