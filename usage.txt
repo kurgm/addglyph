@@ -140,6 +140,10 @@ U+1F600の文字として処理されます
 「INFO:addglyph.main:added: U+xxxx U+yyyy as non-default」
 　…非デフォルトVS <U+xxxx U+yyyy>をフォントに追加した
 「INFO:addglyph.main:already in font: U+xxxx U+yyyy」…<U+xxxx U+yyyy>は既にフォントに入っている
+「INFO:addglyph.main:added: zzzz: uniAAAA -> uniBBBB, uniCCCC」
+　…置換規則をフォントに追加した（既存の規則にグリフを追加する場合も含む）
+「INFO:addglyph.main:already in font: zzzz: uniAAAA -> uniBBBB, uniCCCC」
+　…置換規則はすでにフォントに入っている
 「INFO:addglyph.main:### glyphs added!」…###個のグリフを追加した
 「INFO:addglyph.main:saving...」…保存中
 「INFO:addglyph.main:reordering...」…フォントファイル内のテーブルを並び替え中
