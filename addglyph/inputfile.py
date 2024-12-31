@@ -4,6 +4,7 @@ import contextlib
 import logging
 import re
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 
 from .error import AddGlyphUserError
 
@@ -134,6 +135,14 @@ def get_vs_dict(vsfiles: Sequence[str]) -> dict[tuple[int, int], bool]:
 GlyphSpec = tuple[int, int | None] | int
 
 
+@dataclass
+class GSUBSpec:
+    entries_by_tag: dict[str, list[tuple[GlyphSpec, GlyphSpec]]]
+
+    def __bool__(self) -> bool:
+        return bool(self.entries_by_tag)
+
+
 class GSUBFileSyntaxError(InputFileSyntaxError):
     pass
 
@@ -220,7 +229,7 @@ def parse_gsub_line(line: str) -> Iterable[tuple[str, GlyphSpec, GlyphSpec]]:
 
 def get_gsub_spec(
     gsubfiles: Sequence[str],
-) -> dict[str, list[tuple[GlyphSpec, GlyphSpec]]]:
+) -> GSUBSpec:
     gsub: dict[str, list[tuple[GlyphSpec, GlyphSpec]]] = {}
 
     for f in gsubfiles:
@@ -240,4 +249,4 @@ def get_gsub_spec(
                     exc.filename = f
                     raise
 
-    return gsub
+    return GSUBSpec(entries_by_tag=gsub)
