@@ -6,6 +6,8 @@ import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from fontTools.misc.textTools import Tag
+
 from .error import AddGlyphUserError
 
 logger = logging.getLogger(__name__)
@@ -137,8 +139,8 @@ GlyphSpec = tuple[int, int | None] | int
 
 @dataclass
 class GSUBSpec:
-    language_systems: list[tuple[str, str]]
-    entries_by_tag: dict[str, list[tuple[GlyphSpec, GlyphSpec]]]
+    language_systems: list[tuple[Tag, Tag]]
+    entries_by_tag: dict[Tag, list[tuple[GlyphSpec, GlyphSpec]]]
 
     def __bool__(self) -> bool:
         return bool(self.entries_by_tag)
@@ -148,7 +150,7 @@ class GSUBFileSyntaxError(InputFileSyntaxError):
     pass
 
 
-def try_parse_language_system_line(line: str) -> tuple[str, str] | None:
+def try_parse_language_system_line(line: str) -> tuple[Tag, Tag] | None:
     row = line.split()
     if len(row) != 3:
         return None
@@ -160,7 +162,7 @@ def try_parse_language_system_line(line: str) -> tuple[str, str] | None:
     if len(script_tag) != 4 or len(language_tag) != 4:
         return None
 
-    return script_tag, language_tag
+    return Tag(script_tag), Tag(language_tag)
 
 
 def is_vs_char(c: str) -> bool:
@@ -220,7 +222,7 @@ def parse_glyphspecs(s: str) -> Iterable[GlyphSpec]:
 feature_tag_re = re.compile(r"[\x20-\x7f]{4}")
 
 
-def parse_gsub_line(line: str) -> Iterable[tuple[str, GlyphSpec, GlyphSpec]]:
+def parse_gsub_line(line: str) -> Iterable[tuple[Tag, GlyphSpec, GlyphSpec]]:
     row = [decode_entity(col) for col in line.split()]
     if not row:
         # empty line
@@ -233,6 +235,7 @@ def parse_gsub_line(line: str) -> Iterable[tuple[str, GlyphSpec, GlyphSpec]]:
 
     if not feature_tag_re.fullmatch(feature_tag):
         raise GSUBFileSyntaxError(f"invalid feature tag: {feature_tag}")
+    feature_tag = Tag(feature_tag)
 
     input_glyphs = list(parse_glyphspecs(input_glyph_str))
     if len(input_glyphs) != 1:
@@ -246,8 +249,8 @@ def parse_gsub_line(line: str) -> Iterable[tuple[str, GlyphSpec, GlyphSpec]]:
 def get_gsub_spec(
     gsubfiles: Sequence[str],
 ) -> GSUBSpec:
-    language_systems: list[tuple[str, str]] = []
-    gsub: dict[str, list[tuple[GlyphSpec, GlyphSpec]]] = {}
+    language_systems: list[tuple[Tag, Tag]] = []
+    gsub: dict[Tag, list[tuple[GlyphSpec, GlyphSpec]]] = {}
 
     for f in gsubfiles:
         with open_text(f, err_hint="GSUB text file") as file:
@@ -270,11 +273,11 @@ def get_gsub_spec(
                     raise
 
     language_systems = language_systems or [
-        ("DFLT", "dflt"),
-        ("cyrl", "dflt"),
-        ("grek", "dflt"),
-        ("hani", "dflt"),
-        ("kana", "dflt"),
-        ("latn", "dflt"),
+        (Tag("DFLT"), Tag("dflt")),
+        (Tag("cyrl"), Tag("dflt")),
+        (Tag("grek"), Tag("dflt")),
+        (Tag("hani"), Tag("dflt")),
+        (Tag("kana"), Tag("dflt")),
+        (Tag("latn"), Tag("dflt")),
     ]
     return GSUBSpec(language_systems=language_systems, entries_by_tag=gsub)
