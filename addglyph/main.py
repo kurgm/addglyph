@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
+from fontTools.misc.textTools import Tag
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f
 from fontTools.ttLib.tables import otTables as otTables_
@@ -390,10 +391,10 @@ class GSUBRuleAdder:
             )
 
     def __init__(
-        self, ttf: TTFont, language_systems: list[tuple[str, str]]
+        self, ttf: TTFont, language_systems: list[tuple[Tag, Tag]]
     ) -> None:
         self._gsub = cast("G_S_U_B_.table_G_S_U_B_", ttf["GSUB"])
-        self._feature_indices_by_tag: dict[str, set[int]] = {}
+        self._feature_indices_by_tag: dict[Tag, set[int]] = {}
         self._feature_adders: dict[
             int, GSUBRuleAdder.GSUBFeatureRuleAdder
         ] = {}
@@ -404,7 +405,7 @@ class GSUBRuleAdder:
 
     @staticmethod
     def _get_dflt_langsys(
-        gsub: G_S_U_B_.table_G_S_U_B_, langsys_tags: list[tuple[str, str]]
+        gsub: G_S_U_B_.table_G_S_U_B_, langsys_tags: Sequence[tuple[Tag, Tag]]
     ):
         def create_langsys():
             langsys = otTables.LangSys()
@@ -414,7 +415,7 @@ class GSUBRuleAdder:
             langsys.FeatureIndex = []
             return langsys
 
-        def ensure_langsys(script_tag: str, langsys_tag: str):
+        def ensure_langsys(script_tag: Tag, langsys_tag: Tag):
             for script_record in gsub.table.ScriptList.ScriptRecord:
                 if script_record.ScriptTag == script_tag:
                     break
@@ -476,7 +477,7 @@ class GSUBRuleAdder:
 
         raise KeyError(langsys_tag)
 
-    def _ensure_langsys_has_feature(self, feature_tag: str) -> None:
+    def _ensure_langsys_has_feature(self, feature_tag: Tag) -> None:
         # Ensure that the DFLT script's default langsys has the feature
         for feature_index in self._dflt_langsys.FeatureIndex:
             feature_record = self._gsub.table.FeatureList.FeatureRecord[
@@ -521,7 +522,7 @@ class GSUBRuleAdder:
             langsys.FeatureIndex.append(feature_index)
             langsys.FeatureCount += 1
 
-    def _get_feature_indices(self, feature_tag: str) -> set[int]:
+    def _get_feature_indices(self, feature_tag: Tag) -> set[int]:
         if feature_tag in self._feature_indices_by_tag:
             return self._feature_indices_by_tag[feature_tag]
 
@@ -556,7 +557,7 @@ class GSUBRuleAdder:
         return self._feature_adders[feature_index]
 
     def add_rule(
-        self, feature_tag: str, target: str, replacements: list[str]
+        self, feature_tag: Tag, target: str, replacements: list[str]
     ) -> None:
         feature_indices = self._get_feature_indices(feature_tag)
         for feature_index in feature_indices:
@@ -661,7 +662,7 @@ class AddGlyphHandler:
         return self._gsub_adder
 
     def add_gsub_rules(
-        self, feature_tag: str, target: str, replacements: list[str]
+        self, feature_tag: Tag, target: str, replacements: list[str]
     ) -> None:
         gsub_adder = self._get_gsub_adder()
         gsub_adder.add_rule(feature_tag, target, replacements)
