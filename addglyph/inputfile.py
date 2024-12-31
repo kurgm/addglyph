@@ -137,6 +137,7 @@ GlyphSpec = tuple[int, int | None] | int
 
 @dataclass
 class GSUBSpec:
+    language_systems: list[tuple[str, str]]
     entries_by_tag: dict[str, list[tuple[GlyphSpec, GlyphSpec]]]
 
     def __bool__(self) -> bool:
@@ -145,6 +146,21 @@ class GSUBSpec:
 
 class GSUBFileSyntaxError(InputFileSyntaxError):
     pass
+
+
+def try_parse_language_system_line(line: str) -> tuple[str, str] | None:
+    row = line.split()
+    if len(row) != 3:
+        return None
+    if row[0] != "languagesystem":
+        return None
+
+    script_tag = row[1].ljust(4)
+    language_tag = row[2].ljust(4)
+    if len(script_tag) != 4 or len(language_tag) != 4:
+        return None
+
+    return script_tag, language_tag
 
 
 def is_vs_char(c: str) -> bool:
@@ -230,11 +246,15 @@ def parse_gsub_line(line: str) -> Iterable[tuple[str, GlyphSpec, GlyphSpec]]:
 def get_gsub_spec(
     gsubfiles: Sequence[str],
 ) -> GSUBSpec:
+    language_systems: list[tuple[str, str]] = []
     gsub: dict[str, list[tuple[GlyphSpec, GlyphSpec]]] = {}
 
     for f in gsubfiles:
         with open_text(f, err_hint="GSUB text file") as file:
             for lineno, line in enumerate(file):
+                if dat := try_parse_language_system_line(line):
+                    language_systems.append(dat)
+                    continue
                 try:
                     for (
                         feature_tag,
@@ -249,4 +269,12 @@ def get_gsub_spec(
                     exc.filename = f
                     raise
 
-    return GSUBSpec(entries_by_tag=gsub)
+    language_systems = language_systems or [
+        ("DFLT", "dflt"),
+        ("cyrl", "dflt"),
+        ("grek", "dflt"),
+        ("hani", "dflt"),
+        ("kana", "dflt"),
+        ("latn", "dflt"),
+    ]
+    return GSUBSpec(language_systems=language_systems, entries_by_tag=gsub)
