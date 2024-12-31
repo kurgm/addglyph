@@ -389,37 +389,92 @@ class GSUBRuleAdder:
                 f"{target} -> {', '.join(replacements)}"
             )
 
-    def __init__(self, ttf: TTFont) -> None:
+    def __init__(
+        self, ttf: TTFont, language_systems: list[tuple[str, str]]
+    ) -> None:
         self._gsub = cast("G_S_U_B_.table_G_S_U_B_", ttf["GSUB"])
         self._feature_indices_by_tag: dict[str, set[int]] = {}
         self._feature_adders: dict[
             int, GSUBRuleAdder.GSUBFeatureRuleAdder
         ] = {}
 
-        self._dflt_langsys = self._get_dflt_langsys(self._gsub)
+        self._dflt_langsys = self._get_dflt_langsys(
+            self._gsub, language_systems
+        )
 
     @staticmethod
-    def _get_dflt_langsys(gsub: G_S_U_B_.table_G_S_U_B_):
+    def _get_dflt_langsys(
+        gsub: G_S_U_B_.table_G_S_U_B_, langsys_tags: list[tuple[str, str]]
+    ):
+        def create_langsys():
+            langsys = otTables.LangSys()
+            langsys.LookupOrder = None
+            langsys.ReqFeatureIndex = 0xFFFF
+            langsys.FeatureCount = 0
+            langsys.FeatureIndex = []
+            return langsys
+
+        def ensure_langsys(script_tag: str, langsys_tag: str):
+            for script_record in gsub.table.ScriptList.ScriptRecord:
+                if script_record.ScriptTag == script_tag:
+                    break
+            else:
+                script_record = otTables.ScriptRecord()
+                script_record.ScriptTag = script_tag
+                script_record.Script = otTables.Script()
+                script_record.Script.DefaultLangSys = None
+                script_record.Script.LangSysCount = 0
+                script_record.Script.LangSysRecord = []
+                gsub.table.ScriptList.ScriptRecord.append(script_record)
+                gsub.table.ScriptList.ScriptRecord.sort(
+                    key=lambda sr: sr.ScriptTag
+                )
+                gsub.table.ScriptList.ScriptCount += 1
+
+            if langsys_tag == "dflt":
+                if script_record.Script.DefaultLangSys is not None:
+                    return
+                script_record.Script.DefaultLangSys = create_langsys()
+                return
+
+            for langsys_record in script_record.Script.LangSysRecord:
+                if langsys_record.LangSysTag == langsys_tag:
+                    return
+
+            langsys_record = otTables.LangSysRecord()
+            langsys_record.LangSysTag = langsys_tag
+            langsys_record.LangSys = create_langsys()
+            script_record.Script.LangSysRecord.append(langsys_record)
+            script_record.Script.LangSysRecord.sort(
+                key=lambda lsr: lsr.LangSysTag
+            )
+            script_record.Script.LangSysCount += 1
+
+        for script_tag, langsys_tag in langsys_tags:
+            ensure_langsys(script_tag, langsys_tag)
+
+        # Prefer the DFLT script's default langsys
         for script_record in gsub.table.ScriptList.ScriptRecord:
             if script_record.ScriptTag == "DFLT":
                 dflt_langsys = script_record.Script.DefaultLangSys
                 assert dflt_langsys is not None
                 return dflt_langsys
+
+        script_tag, langsys_tag = langsys_tags[0]
+        for script_record in gsub.table.ScriptList.ScriptRecord:
+            if script_record.ScriptTag == script_tag:
+                break
         else:
-            dflt_script_record = otTables.ScriptRecord()
-            dflt_script_record.ScriptTag = "DFLT"
-            dflt_script_record.Script = otTables.Script()
-            dflt_langsys = otTables.LangSys()
-            dflt_langsys.LookupOrder = None
-            dflt_langsys.ReqFeatureIndex = 0xFFFF
-            dflt_langsys.FeatureCount = 0
-            dflt_langsys.FeatureIndex = []
-            dflt_script_record.Script.DefaultLangSys = dflt_langsys
-            dflt_script_record.Script.LangSysCount = 0
-            dflt_script_record.Script.LangSysRecord = []
-            gsub.table.ScriptList.ScriptRecord.append(dflt_script_record)
-            gsub.table.ScriptList.ScriptCount += 1
-            return dflt_langsys
+            raise KeyError(script_tag)
+
+        if langsys_tag == "dflt":
+            return script_record.Script.DefaultLangSys
+
+        for langsys_record in script_record.Script.LangSysRecord:
+            if langsys_record.LangSysTag == langsys_tag:
+                return langsys_record.LangSys
+
+        raise KeyError(langsys_tag)
 
     def _ensure_langsys_has_feature(self, feature_tag: str) -> None:
         # Ensure that the DFLT script's default langsys has the feature
@@ -511,7 +566,7 @@ class GSUBRuleAdder:
 
 
 class AddGlyphHandler:
-    def __init__(self, fontfile: str) -> None:
+    def __init__(self, fontfile: str, gsub_spec: GSUBSpec) -> None:
         try:
             self.ttf = TTFont(
                 fontfile,
@@ -526,6 +581,7 @@ class AddGlyphHandler:
         self._adder = FontGlyphAdder(self.ttf)
         self._font_vs_cmap: FontVSCmap | None = None
         self._gsub_adder: GSUBRuleAdder | None = None
+        self._gsub_spec = gsub_spec
 
     def _get_font_vs_cmap(self) -> FontVSCmap:
         if self._font_vs_cmap is None:
@@ -599,7 +655,9 @@ class AddGlyphHandler:
 
     def _get_gsub_adder(self) -> GSUBRuleAdder:
         if self._gsub_adder is None:
-            self._gsub_adder = GSUBRuleAdder(self.ttf)
+            self._gsub_adder = GSUBRuleAdder(
+                self.ttf, self._gsub_spec.language_systems
+            )
         return self._gsub_adder
 
     def add_gsub_rules(
@@ -637,20 +695,20 @@ def addglyph(
     fontfile: str,
     chars: Iterable[str],
     vs: dict[tuple[int, int], bool],
-    gsub_gspec: GSUBSpec,
+    gsub_spec: GSUBSpec,
     outfont: str | None = None,
 ) -> None:
-    handler = AddGlyphHandler(fontfile)
+    handler = AddGlyphHandler(fontfile, gsub_spec)
     for char in chars:
         codepoint = ord(char)
         handler.add_glyph(codepoint)
     for (base, selector), is_default in vs.items():
         handler.add_vs_glyph(base, selector, is_default)
 
-    if gsub_gspec:
+    if gsub_spec:
         undo_gsub_win7_fix(handler.ttf)
 
-    for feature_tag, gspec_list in gsub_gspec.entries_by_tag.items():
+    for feature_tag, gspec_list in gsub_spec.entries_by_tag.items():
         alternate_by_input: dict[str, list[str]] = {}
         for input_glyph, alternate_glyph in gspec_list:
             input_name = handler.get_glyphname_from_gspec(input_glyph)
