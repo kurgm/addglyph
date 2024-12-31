@@ -421,14 +421,15 @@ class GSUBRuleAdder:
             gsub.table.ScriptList.ScriptCount += 1
             return dflt_langsys
 
-    def _ensure_dflt_feature(self, feature_tag: str) -> None:
-        if not any(
-            self._gsub.table.FeatureList.FeatureRecord[
+    def _ensure_langsys_has_feature(self, feature_tag: str) -> None:
+        # Ensure that the DFLT script's default langsys has the feature
+        for feature_index in self._dflt_langsys.FeatureIndex:
+            feature_record = self._gsub.table.FeatureList.FeatureRecord[
                 feature_index
-            ].FeatureTag
-            == feature_tag
-            for feature_index in self._dflt_langsys.FeatureIndex
-        ):
+            ]
+            if feature_record.FeatureTag == feature_tag:
+                break
+        else:
             feature_record = otTables.FeatureRecord()
             feature_record.FeatureTag = feature_tag
             feature_record.Feature = otTables.Feature()
@@ -441,11 +442,35 @@ class GSUBRuleAdder:
             self._dflt_langsys.FeatureIndex.append(feature_index)
             self._dflt_langsys.FeatureCount += 1
 
+        # Ensure that all langsys have the feature
+        for langsys in [
+            langsys
+            for script_record in self._gsub.table.ScriptList.ScriptRecord
+            for langsys in [
+                script_record.Script.DefaultLangSys,
+                *(
+                    langsys_record.LangSys
+                    for langsys_record in script_record.Script.LangSysRecord
+                ),
+            ]
+            if langsys is not None
+        ]:
+            if any(
+                self._gsub.table.FeatureList.FeatureRecord[
+                    feature_index
+                ].FeatureTag
+                == feature_tag
+                for feature_index in langsys.FeatureIndex
+            ):
+                continue
+            langsys.FeatureIndex.append(feature_index)
+            langsys.FeatureCount += 1
+
     def _get_feature_indices(self, feature_tag: str) -> set[int]:
         if feature_tag in self._feature_indices_by_tag:
             return self._feature_indices_by_tag[feature_tag]
 
-        self._ensure_dflt_feature(feature_tag)
+        self._ensure_langsys_has_feature(feature_tag)
         feature_indices = {
             feature_index
             for script_record in self._gsub.table.ScriptList.ScriptRecord
