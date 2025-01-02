@@ -80,14 +80,19 @@ OpenType featureを指定したときの字形変化をサポートしたり、�
 
 ・2列目は置換前のグリフ
 　単一のUnicode文字か、VSで指定します
-　すでにあるグリフでも大丈夫です
 　2つ以上のグリフを同時に指定はできません
+
+　元のフォントにすでにあるグリフでも大丈夫です
+　フォントに対応するグリフが無い場合は無視されます
 
 ・3列目は置換後のグリフ
 　置換後のグリフが複数あれば、alternate substitution (lookup type = 3) になります
 
 　（上の例では（元のフォントには置換規則が無かったとする）、できあがったフォントでは
 　　aalt=2 の feature が有効化されるとテキスト「亀」の字形が「龟」に変化します）
+
+　元のフォントにすでにあるグリフでも大丈夫です
+　フォントに対応するグリフが無い場合は無視されます
 
 この機能は簡便にグリフの関連付けを行う用途を想定しているので、複雑な置換規則などを
 すでに持っているフォントに対して実行すると、フォントの機能が破壊される可能性があります
@@ -140,6 +145,11 @@ U+1F600の文字として処理されます
 「INFO:addglyph.main:added: U+xxxx U+yyyy as non-default」
 　…非デフォルトVS <U+xxxx U+yyyy>をフォントに追加した
 「INFO:addglyph.main:already in font: U+xxxx U+yyyy」…<U+xxxx U+yyyy>は既にフォントに入っている
+「INFO:addglyph.main:input glyph not found: U+xxxx」
+　…置換規則の第2列のグリフが見つからないので無視された
+　 （必要であればテキストファイルかVSファイルで追加してください）
+「INFO:addglyph.main:alternate glyph not found: U+xxxx」
+　…置換規則の第3列のグリフが見つからないので無視された（同上）
 「INFO:addglyph.main:added: zzzz: uniAAAA -> uniBBBB, uniCCCC」
 　…置換規則をフォントに追加した（既存の規則にグリフを追加する場合も含む）
 「INFO:addglyph.main:already in font: zzzz: uniAAAA -> uniBBBB, uniCCCC」
@@ -171,8 +181,6 @@ U+1F600の文字として処理されます
 　「invalid input glyph: ##」…置換前のグリフが1行に2つ以上指定されている
 「ERROR:addglyph.main:Error while loading font file」…フォントファイルの読み込みに失敗しました
 （存在する壊れていないフォントファイルを指定しているか確認してください）
-「addglyph.error.AddGlyphUserError: Glyph not found: U+XXXX U+YYYYY」…GSUBファイルに指定されているVSがフォントに存在しない
-（VSファイルを使って追加してください（GSUBファイルと同時にVSファイルを指定することができます））
 「ERROR:addglyph.main:Error while saving font file」…フォントファイルの書き込みに失敗しました
 （書き込みの権限があるか、ディスクに空き容量があるか、ファイルが使用中でないか確認して下さい）
 「ERROR:addglyph.__main__:An unexpected error occurred!」「ERROR:addglyph.__main__:(please report this to @kurgm)」

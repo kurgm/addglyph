@@ -10,7 +10,7 @@ from fontTools.ttLib.tables import _c_m_a_p, _g_l_y_f
 from fontTools.ttLib.tables import otTables as otTables_
 
 from .error import AddGlyphUserError
-from .inputfile import GlyphSpec, GSUBSpec
+from .inputfile import GlyphSpec, GSUBSpec, stringify_glyphspec
 from .monkeypatch import apply_monkey_patch
 
 if TYPE_CHECKING:
@@ -644,23 +644,19 @@ class AddGlyphHandler:
                 f"U+{base:04X} U+{selector:04X} as non-default",
             )
 
-    def get_glyphname_from_gspec(self, gspec: GlyphSpec) -> str:
+    def get_glyphname_from_gspec(self, gspec: GlyphSpec) -> str | None:
         if isinstance(gspec, int):
-            return self.ttf.getGlyphName(gspec)
+            glyph_order = cast("list[str]", self.ttf.getGlyphOrder())
+            if gspec >= len(glyph_order):
+                return None
+            return glyph_order[gspec]
 
         base, selector = gspec
         if selector is None:
-            glyphname, _added = self._ensure_glyph(base, f"U+{base:04X}")
-            return glyphname
+            return self._font_cmap.lookup_glyphname(base)
 
         font_vs_cmap = self._get_font_vs_cmap()
-        glyphname = font_vs_cmap.lookup_glyphname(base, selector)
-        if glyphname is not None:
-            return glyphname
-
-        raise AddGlyphUserError(
-            f"Glyph not found: U+{base:04X} U+{selector:04X}"
-        )
+        return font_vs_cmap.lookup_glyphname(base, selector)
 
     def _get_gsub_adder(self) -> GSUBRuleAdder:
         if self._gsub_adder is None:
@@ -721,7 +717,17 @@ def addglyph(
         alternate_by_input: dict[str, list[str]] = {}
         for input_glyph, alternate_glyph in gspec_list:
             input_name = handler.get_glyphname_from_gspec(input_glyph)
+            if input_name is None:
+                str_input_glyph = stringify_glyphspec(input_glyph)
+                logger.info(f"input glyph not found: {str_input_glyph}")
+                continue
             alternate_name = handler.get_glyphname_from_gspec(alternate_glyph)
+            if alternate_name is None:
+                str_alternate_glyph = stringify_glyphspec(alternate_glyph)
+                logger.info(
+                    f"alternate glyph not found: {str_alternate_glyph}"
+                )
+                continue
             alternate_by_input.setdefault(input_name, []).append(
                 alternate_name
             )

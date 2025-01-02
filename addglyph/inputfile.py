@@ -219,6 +219,17 @@ def parse_glyphspecs(s: str) -> Iterable[GlyphSpec]:
         yield from str_to_glyphspecs(buf)
 
 
+def stringify_glyphspec(gspec: GlyphSpec) -> str:
+    if isinstance(gspec, int):
+        return f"GID+{gspec:05d}"
+
+    base, selector = gspec
+    if selector is None:
+        return f"U+{base:04X}"
+
+    return f"U+{base:04X} U+{selector:04X}"
+
+
 feature_tag_re = re.compile(r"[\x20-\x7f]{4}")
 
 
