@@ -96,40 +96,48 @@ class FontCMap:
 
 class FontVSCmap:
     def __init__(self, ttf: TTFont) -> None:
-        cmap = cast("_c_m_a_p.table__c_m_a_p", ttf["cmap"])
+        self._cmap = cast("_c_m_a_p.table__c_m_a_p", ttf["cmap"])
         sub14 = cast(
             "_c_m_a_p.cmap_format_14 | None",
-            cmap.getcmap(platformID=0, platEncID=5),
+            self._cmap.getcmap(platformID=0, platEncID=5),
         )
-        if sub14 is None:
-            sub14 = cast(
-                "_c_m_a_p.cmap_format_14",
-                _c_m_a_p.CmapSubtable.newSubtable(14),
-            )
-            sub14.platformID = 0  # type: ignore
-            sub14.platEncID = 5  # type: ignore
-            sub14.format = 14
-            sub14.length = 0  # will be recalculated by compiler
-            sub14.numVarSelectorRecords = 0  # will be recalculated by compiler
-            sub14.language = 0xFF
-            sub14.cmap = cast("CMap", {})
-            sub14.uvsDict = cast("UVSMap", {})
-            cmap.tables.append(sub14)
-            logger.info("cmap subtable (format=14) created")
         self._sub14 = sub14
-        self._vs_in_font = {
-            (uv, selector): gname
-            for selector, uvList in cast("UVSMap", sub14.uvsDict).items()
-            for uv, gname in uvList
-        }
+        if sub14 is not None:
+            self._vs_in_font: dict[tuple[int, int], str | None] = {
+                (uv, selector): gname
+                for selector, uvList in cast("UVSMap", sub14.uvsDict).items()
+                for uv, gname in uvList
+            }
+        else:
+            self._vs_in_font = {}
+
+    def _ensure_sub14(self) -> _c_m_a_p.cmap_format_14:
+        if self._sub14 is not None:
+            return self._sub14
+
+        sub14 = cast(
+            "_c_m_a_p.cmap_format_14",
+            _c_m_a_p.CmapSubtable.newSubtable(14),
+        )
+        sub14.platformID = 0  # type: ignore
+        sub14.platEncID = 5  # type: ignore
+        sub14.format = 14
+        sub14.length = 0  # will be recalculated by compiler
+        sub14.numVarSelectorRecords = 0  # will be recalculated by compiler
+        sub14.language = 0xFF
+        sub14.cmap = cast("CMap", {})
+        sub14.uvsDict = cast("UVSMap", {})
+        self._cmap.tables.append(sub14)
+        logger.info("cmap subtable (format=14) created")
+        self._sub14 = sub14
+        return sub14
 
     def lookup_glyphname(self, base: int, selector: int) -> str | None:
         return self._vs_in_font.get((base, selector))
 
     def add(self, base: int, selector: int, glyphname: str) -> None:
-        cast("UVSMap", self._sub14.uvsDict).setdefault(selector, []).append(
-            (base, glyphname)
-        )
+        uvsDict = cast("UVSMap", self._ensure_sub14().uvsDict)
+        uvsDict.setdefault(selector, []).append((base, glyphname))
         self._vs_in_font[(base, selector)] = glyphname
 
 
