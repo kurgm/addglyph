@@ -728,6 +728,9 @@ def addglyph(
                     f"alternate glyph not found: {str_alternate_glyph}"
                 )
                 continue
+            if input_name == alternate_name:
+                logger.info(f"input and alternate are the same: {input_name}")
+                continue
             alternate_by_input.setdefault(input_name, []).append(
                 alternate_name
             )
