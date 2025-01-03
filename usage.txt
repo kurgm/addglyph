@@ -146,6 +146,10 @@ U+1F600の文字として処理されます
 「INFO:addglyph.main:added: U+xxxx U+yyyy as non-default」
 　…非デフォルトVS <U+xxxx U+yyyy>をフォントに追加した
 「INFO:addglyph.main:already in font: U+xxxx U+yyyy」…<U+xxxx U+yyyy>は既にフォントに入っている
+「INFO:addglyph.main:script 'zzzz' created」…GSUBテーブルに置換規則を追加するための処理をした
+「INFO:addglyph.main:default langsys for script 'zzzz' created」
+　…GSUBテーブルに置換規則を追加するための処理をした
+「INFO:addglyph.main:feature 'zzzz' created」…GSUBテーブルに置換規則を追加するための処理をした
 「INFO:addglyph.main:input glyph not found: U+xxxx」
 　…置換規則の第2列のグリフが見つからないので無視された
 　 （必要であればテキストファイルかVSファイルで追加してください）
