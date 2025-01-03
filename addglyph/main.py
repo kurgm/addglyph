@@ -439,11 +439,15 @@ class GSUBRuleAdder:
                     key=lambda sr: sr.ScriptTag
                 )
                 gsub.table.ScriptList.ScriptCount += 1
+                logger.info(f"script {script_tag!r} created")
 
             if langsys_tag == "dflt":
                 if script_record.Script.DefaultLangSys is not None:
                     return
                 script_record.Script.DefaultLangSys = create_langsys()
+                logger.info(
+                    f"default langsys for script {script_tag!r} created"
+                )
                 return
 
             for langsys_record in script_record.Script.LangSysRecord:
@@ -458,6 +462,9 @@ class GSUBRuleAdder:
                 key=lambda lsr: lsr.LangSysTag
             )
             script_record.Script.LangSysCount += 1
+            logger.info(
+                f"langsys {langsys_tag!r} for script {script_tag!r} created"
+            )
 
         for script_tag, langsys_tag in langsys_tags:
             ensure_langsys(script_tag, langsys_tag)
@@ -503,6 +510,7 @@ class GSUBRuleAdder:
             feature_index = len(self._gsub.table.FeatureList.FeatureRecord)
             self._gsub.table.FeatureList.FeatureRecord.append(feature_record)
             self._gsub.table.FeatureList.FeatureCount += 1
+            logger.info(f"feature {feature_tag!r} created")
             self._dflt_langsys.FeatureIndex.append(feature_index)
             self._dflt_langsys.FeatureCount += 1
 
