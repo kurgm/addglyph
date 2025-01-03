@@ -88,7 +88,7 @@ VSファイルは次のような形式のテキストファイルで、フォン
 「DEBUG:fontTools.ttLib〜〜〜〜〜〜」…ライブラリのデバッグ用メッセージ
 「INFO:addglyph.main:cmap subtable (format=12) created」…U+10000以上を追加するための処理をした
 「INFO:addglyph.main:cmap subtable (format=14) created」…VSを追加するための処理をした
-「～～UserWarning: 'created' timestamp seems very low～～～」…たぶん無視してok
+「WARNING:fontTools.ttLib～～:'created' timestamp seems very low～～～」…たぶん無視してok
 「INFO:addglyph.main:added: U+xxxx」…U+xxxxをフォントに追加した
 「INFO:addglyph.main:already in font: U+xxxx」…U+xxxxは既にフォントに入っている
 「INFO:addglyph.main:added: U+xxxx U+yyyy as default」
@@ -98,7 +98,6 @@ VSファイルは次のような形式のテキストファイルで、フォン
 「INFO:addglyph.main:already in font: U+xxxx U+yyyy」…<U+xxxx U+yyyy>は既にフォントに入っている
 「INFO:addglyph.main:### glyphs added!」…###個のグリフを追加した
 「INFO:addglyph.main:saving...」…保存中
-「INFO:addglyph.main:reordering...」…フォントファイル内のテーブルを並び替え中
 「INFO:addglyph.main:saved successfully: なんとか_new.ttf」…保存先フォント
 「続行するには何かキーを押してください . . .」…何かキーを押すと終了します
 
