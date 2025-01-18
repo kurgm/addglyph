@@ -67,8 +67,6 @@ aalt 丈&#xE0101; 丈丈&#xE0102;丈&#xE0103;
 aalt 丈&#xE0102; 丈丈&#xE0101;丈&#xE0103;
 aalt 丈&#xE0103; 丈丈&#xE0101;丈&#xE0102;
 
-cv01 a &#xF0000;
-
 GSUBファイルを用いてフォントに置換規則を追加することで、一部のソフトウェアで
 OpenType featureを指定したときの字形変化をサポートしたり、「字形パネル」のようなUIで
 異体字として字形同士を関連付けることができます
@@ -173,8 +171,8 @@ U+1F600の文字として処理されます
 　…フォントファイルが指定されていません
 「usage: addglyph.exe 〜〜」の次の行に「addglyph.exe: error: multiple font files specified」
 　…複数のフォントファイルが指定されています（.otf, .ttf は1つだけ指定してください）
-「usage: addglyph.exe 〜〜」の次の行に「addglyph.exe: error: no text files or vs files specified」
-　…テキストファイルもVSファイルも指定されていません
+「usage: addglyph.exe 〜〜」の次の行に「addglyph.exe: error: none of text files, vs files or gsub files specified」
+　…テキストファイルもVSファイルもGSUBファイルも指定されていません
 「ERROR:addglyph.inputfile:Error while loading text file 'うんぬん.txt'」…テキストファイルの読み込みに失敗しました
 （存在するテキストファイルを指定しているか確認してください）
 「ERROR:addglyph.inputfile:Error while loading VS text file 'vsかんぬん.txt'」…VSファイルの読み込みに失敗しました
