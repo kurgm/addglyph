@@ -186,6 +186,7 @@ U+1F600の文字として処理されます
 　「invalid number of columns: ##」…その行が3列に区切られていない
 　「invalid feature tag: ##」…OpenType feature タグの形式が不正
 　「invalid input glyph: ##」…置換前のグリフが1行に2つ以上指定されている
+「addglyph.gsub.GSUBInvariantViolation: 〜〜」…フォント内に複雑な置換規則があるため、置換規則の追加に失敗した
 「ERROR:addglyph.main:Error while loading font file」…フォントファイルの読み込みに失敗しました
 （存在する壊れていないフォントファイルを指定しているか確認してください）
 「ERROR:addglyph.main:Error while saving font file」…フォントファイルの書き込みに失敗しました

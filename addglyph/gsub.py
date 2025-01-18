@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import logging
+from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from fontTools.misc.textTools import Tag
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables import otTables as otTables_
+
+from .error import AddGlyphUserError
 
 if TYPE_CHECKING:
     from fontTools.ttLib.tables import G_S_U_B_
@@ -17,6 +20,217 @@ logger = logging.getLogger(__name__)
 otTables = cast("Any", otTables_)
 
 
+class GSUBInvariantViolation(AddGlyphUserError):
+    pass
+
+
+def _merge_alternates(left: list[str], right: Iterable[str]) -> list[str]:
+    return left + [e for e in dict.fromkeys(right) if e not in left]
+
+
+class GSUBLookupRuleAdder(ABC):
+    def __init__(self, feature_tag: str) -> None:
+        self._feature_tag = feature_tag
+
+    @abstractmethod
+    def try_add_rule(self, target: str, replacements: list[str]) -> bool:
+        pass
+
+    def _log_added(self, target: str, replacements: list[str]) -> None:
+        logger.info(
+            f"added: {self._feature_tag}: "
+            f"{target} -> {', '.join(replacements)}"
+        )
+
+    def _log_already_in_font(
+        self, target: str, replacements: list[str]
+    ) -> None:
+        logger.info(
+            f"already in font: {self._feature_tag}: "
+            f"{target} -> {', '.join(replacements)}"
+        )
+
+
+class GSUBSingleSubstRuleAdder(GSUBLookupRuleAdder):
+    @abstractmethod
+    def _get_subtables(self) -> list[otTables_.SingleSubst]:
+        pass
+
+    @abstractmethod
+    def _add_subtable(self, subtable: otTables_.SingleSubst) -> None:
+        pass
+
+    def _new_subtable(self) -> otTables_.SingleSubst:
+        subtable = otTables_.SingleSubst()
+        subtable.mapping = {}
+        self._add_subtable(subtable)
+        return subtable
+
+    def try_add_rule(self, target: str, replacements: list[str]) -> bool:
+        if len(replacements) > 1:
+            return False
+        if not replacements:
+            return True
+
+        subtables = self._get_subtables()
+        for subtable in subtables:
+            mapping = cast("dict[str, str]", subtable.mapping)
+            if target not in mapping:
+                continue
+            merged = _merge_alternates([mapping[target]], replacements)
+            if merged == [mapping[target]]:
+                self._log_already_in_font(target, merged)
+                return True
+            assert len(merged) > 1
+            return False
+
+        if subtables:
+            subtable = subtables[0]
+        else:
+            subtable = self._new_subtable()
+
+        mapping = cast("dict[str, str]", subtable.mapping)
+        assert target not in mapping
+        mapping[target] = replacements[0]
+        self._log_added(target, replacements)
+        return True
+
+    def get_merged_mapping(self) -> dict[str, str]:
+        mapping = {}
+        for subtable in reversed(self._get_subtables()):
+            mapping.update(subtable.mapping)
+        return mapping
+
+
+class GSUBAlternateSubstRuleAdder(GSUBLookupRuleAdder):
+    @abstractmethod
+    def _get_subtables(self) -> list[otTables_.AlternateSubst]:
+        pass
+
+    @abstractmethod
+    def _add_subtable(self, subtable: otTables_.AlternateSubst) -> None:
+        pass
+
+    def _new_subtable(self) -> otTables_.AlternateSubst:
+        subtable = otTables_.AlternateSubst()
+        subtable.alternates = {}
+        self._add_subtable(subtable)
+        return subtable
+
+    def try_add_rule(
+        self, target: str, replacements: list[str]
+    ) -> Literal[True]:
+        if not replacements:
+            return True
+
+        subtables = self._get_subtables()
+        for subtable in subtables:
+            alternates = cast("dict[str, list[str]]", subtable.alternates)
+            if target not in alternates:
+                continue
+            existing = alternates[target]
+            new_alternates = _merge_alternates(existing, replacements)
+            alternates[target] = new_alternates
+            if existing != new_alternates:
+                self._log_added(target, new_alternates)
+            else:
+                self._log_already_in_font(target, new_alternates)
+            return True
+
+        if subtables:
+            subtable = subtables[0]
+        else:
+            subtable = self._new_subtable()
+
+        alternates = cast("dict[str, list[str]]", subtable.alternates)
+        assert target not in alternates
+        alternates[target] = replacements
+        self._log_added(target, replacements)
+        return True
+
+
+class GSUBLookupType1RuleAdder(GSUBSingleSubstRuleAdder):
+    def __init__(self, feature_tag: str, lookup) -> None:
+        super().__init__(feature_tag)
+        self._lookup = lookup
+
+    def _get_subtables(self) -> list[otTables_.SingleSubst]:
+        subtables = self._lookup.SubTable
+        assert all(
+            isinstance(subtable, otTables_.SingleSubst)
+            for subtable in subtables
+        )
+        return cast("list[otTables_.SingleSubst]", subtables)
+
+    def _add_subtable(self, subtable: otTables_.SingleSubst) -> None:
+        self._lookup.SubTable.append(subtable)
+        self._lookup.SubTableCount += 1
+
+
+class GSUBLookupType7SingleSubstRuleAdder(GSUBSingleSubstRuleAdder):
+    def __init__(self, feature_tag: str, lookup) -> None:
+        super().__init__(feature_tag)
+        assert all(st.ExtensionLookupType == 1 for st in lookup.SubTable)
+        self._lookup = lookup
+
+    def _get_subtables(self) -> list[otTables_.SingleSubst]:
+        subtables = [st.ExtSubTable for st in self._lookup.Subtable]
+        assert all(
+            isinstance(subtable, otTables_.SingleSubst)
+            for subtable in subtables
+        )
+        return cast("list[otTables_.SingleSubst]", subtables)
+
+    def _add_subtable(self, subtable: otTables_.SingleSubst) -> None:
+        st = otTables.ExtensionSubst()
+        st.Format = 1
+        st.ExtensionLookupType = 1
+        st.ExtSubTable = subtable
+        self._lookup.SubTable.append(st)
+        self._lookup.SubTableCount += 1
+
+
+class GSUBLookupType3RuleAdder(GSUBAlternateSubstRuleAdder):
+    def __init__(self, feature_tag: str, lookup) -> None:
+        super().__init__(feature_tag)
+        self._lookup = lookup
+
+    def _get_subtables(self) -> list[otTables_.AlternateSubst]:
+        subtables = self._lookup.SubTable
+        assert all(
+            isinstance(subtable, otTables_.AlternateSubst)
+            for subtable in subtables
+        )
+        return cast("list[otTables_.AlternateSubst]", subtables)
+
+    def _add_subtable(self, subtable: otTables_.AlternateSubst) -> None:
+        self._lookup.SubTable.append(subtable)
+        self._lookup.SubTableCount += 1
+
+
+class GSUBLookupType7AlternateSubstRuleAdder(GSUBAlternateSubstRuleAdder):
+    def __init__(self, feature_tag: str, lookup) -> None:
+        super().__init__(feature_tag)
+        assert all(st.ExtensionLookupType == 3 for st in lookup.SubTable)
+        self._lookup = lookup
+
+    def _get_subtables(self) -> list[otTables_.AlternateSubst]:
+        subtables = [st.ExtSubTable for st in self._lookup.Subtable]
+        assert all(
+            isinstance(subtable, otTables_.AlternateSubst)
+            for subtable in subtables
+        )
+        return cast("list[otTables_.AlternateSubst]", subtables)
+
+    def _add_subtable(self, subtable: otTables_.AlternateSubst) -> None:
+        st = otTables.ExtensionSubst()
+        st.Format = 1
+        st.ExtensionLookupType = 3
+        st.ExtSubTable = subtable
+        self._lookup.SubTable.append(st)
+        self._lookup.SubTableCount += 1
+
+
 class GSUBFeatureRuleAdder:
     def __init__(
         self, gsub: G_S_U_B_.table_G_S_U_B_, feature_index: int
@@ -25,168 +239,102 @@ class GSUBFeatureRuleAdder:
         feature_record = gsub.table.FeatureList.FeatureRecord[feature_index]
         self._feature_tag = feature_record.FeatureTag
         self._feature = feature_record.Feature
-        self._lookup_indices = cast("list[int]", self._feature.LookupListIndex)
-        self._default_lookup_single_subtable: otTables_.SingleSubst | None = (
-            None
-        )
-        self._default_lookup_alternate_subtable: (
-            otTables_.AlternateSubst | None
-        ) = None
-
-    def _add_lookup(self, lookup) -> int:
-        lookup_index = len(self._gsub.table.LookupList.Lookup)
-        self._gsub.table.LookupList.Lookup.append(lookup)
-        self._gsub.table.LookupList.LookupCount += 1
-        self._lookup_indices.append(lookup_index)
-        self._feature.LookupCount += 1
-        return lookup_index
-
-    def _get_default_lookup_single(self):
-        for lookup_index in self._lookup_indices:
-            lookup = self._gsub.table.LookupList.Lookup[lookup_index]
-            if lookup.LookupType == 1:
-                return lookup
-
-        lookup = otTables.Lookup()
-        lookup.LookupType = 1
-        lookup.LookupFlag = 0
-        lookup.SubTableCount = 0
-        lookup.SubTable = []
-        self._add_lookup(lookup)
-        return lookup
-
-    def _get_default_lookup_single_subtable(self) -> otTables_.SingleSubst:
-        if self._default_lookup_single_subtable is not None:
-            return self._default_lookup_single_subtable
-
-        lookup = self._get_default_lookup_single()
-        if lookup.SubTable:
-            subtable = lookup.SubTable[0]
-            assert isinstance(subtable, otTables_.SingleSubst)
+        lookup_indices = cast("list[int]", self._feature.LookupListIndex)
+        if len(lookup_indices) > 1:
+            raise GSUBInvariantViolation(
+                f"feature {self._feature_tag!r} has multiple lookups: "
+                f"{lookup_indices!r}"
+            )
+        if lookup_indices:
+            lookup_index = lookup_indices[0]
+            lookup = gsub.table.LookupList.Lookup[lookup_index]
         else:
-            subtable = otTables.SingleSubst()
-            subtable.mapping = {}
-            lookup.SubTable.append(subtable)
-            lookup.SubTableCount += 1
-        self._default_lookup_single_subtable = subtable
-        return subtable
+            lookup = otTables.Lookup()
+            lookup.LookupType = 1
+            lookup.LookupFlag = 0
+            lookup.SubTableCount = 0
+            lookup.SubTable = []
+            lookup_index = len(gsub.table.LookupList.Lookup)
+            gsub.table.LookupList.Lookup.append(lookup)
+            gsub.table.LookupList.LookupCount += 1
+            lookup_indices.append(lookup_index)
+            self._feature.LookupCount += 1
 
-    def _get_default_lookup_alternate(self):
-        for lookup_index in self._lookup_indices:
-            lookup = self._gsub.table.LookupList.Lookup[lookup_index]
-            if lookup.LookupType == 3:
-                return lookup
-
-        lookup = otTables.Lookup()
-        lookup.LookupType = 3
-        lookup.LookupFlag = 0
-        lookup.SubTableCount = 0
-        lookup.SubTable = []
-        self._add_lookup(lookup)
-        return lookup
-
-    def _get_default_lookup_alternate_subtable(
-        self,
-    ) -> otTables_.AlternateSubst:
-        if self._default_lookup_alternate_subtable is not None:
-            return self._default_lookup_alternate_subtable
-
-        lookup = self._get_default_lookup_alternate()
-        if lookup.SubTable:
-            subtable = lookup.SubTable[0]
-            assert isinstance(subtable, otTables_.AlternateSubst)
+        if lookup.LookupType == 1:
+            lookup_adder = GSUBLookupType1RuleAdder(self._feature_tag, lookup)
+        elif lookup.LookupType == 3:
+            lookup_adder = GSUBLookupType3RuleAdder(self._feature_tag, lookup)
+        elif lookup.LookupType == 7:
+            if lookup.SubTable:
+                lookup_type = lookup.SubTable[0].ExtensionLookupType
+            else:
+                lookup_type = 1
+            if lookup_type == 1:
+                lookup_adder = GSUBLookupType7SingleSubstRuleAdder(
+                    self._feature_tag, lookup
+                )
+            elif lookup_type == 3:
+                lookup_adder = GSUBLookupType7AlternateSubstRuleAdder(
+                    self._feature_tag, lookup
+                )
+            else:
+                raise GSUBInvariantViolation(
+                    f"feature {self._feature_tag!r} has lookup "
+                    f"of unsupported type: {lookup_type}"
+                )
         else:
-            subtable = otTables.AlternateSubst()
-            subtable.alternates = {}
-            lookup.SubTable.append(subtable)
-            lookup.SubTableCount += 1
-        self._default_lookup_alternate_subtable = subtable
-        return subtable
+            raise GSUBInvariantViolation(
+                f"feature {self._feature_tag!r} has lookup "
+                f"of unsupported type: {lookup.LookupType}"
+            )
 
-    @staticmethod
-    def _merge_alternates(left: list[str], right: Iterable[str]) -> list[str]:
-        return left + [e for e in dict.fromkeys(right) if e not in left]
+        self._lookup_adder = lookup_adder
 
-    def _try_add_rule_existing_single(
-        self, target: str, replacements: list[str]
-    ) -> list[str]:
-        for lookup_index in self._lookup_indices:
-            lookup = self._gsub.table.LookupList.Lookup[lookup_index]
-            if lookup.LookupType != 1:
-                continue
-            for subtable in lookup.SubTable:
-                assert isinstance(subtable, otTables_.SingleSubst)
-                mapping = cast("dict[str, str]", subtable.mapping)
-                if target in mapping:
-                    replacements = self._merge_alternates(
-                        [mapping[target]], replacements
-                    )
-                    if replacements == [mapping[target]]:
-                        # All new alternates are already in the mapping,
-                        # so we are done
-                        logger.info(
-                            f"already in font: {self._feature_tag}: "
-                            f"{target} -> {', '.join(replacements)}"
-                        )
-                        return []
-                    del mapping[target]
-                    return replacements
+    def _upgrade_lookup_to_alternate(self) -> None:
+        lookup_index = cast("list[int]", self._feature.LookupListIndex)[0]
 
-        return replacements
+        assert isinstance(self._lookup_adder, GSUBSingleSubstRuleAdder)
+        mapping = self._lookup_adder.get_merged_mapping()
 
-    def _try_add_rule_existing_alternate(
-        self, target: str, replacements: list[str]
-    ) -> list[str]:
-        for lookup_index in self._lookup_indices:
-            lookup = self._gsub.table.LookupList.Lookup[lookup_index]
-            if lookup.LookupType != 3:
-                continue
-            for subtable in lookup.SubTable:
-                assert isinstance(subtable, otTables_.AlternateSubst)
-                alternates = cast("dict[str, list[str]]", subtable.alternates)
-                if target in alternates:
-                    existing = alternates[target]
-                    new_alternates = self._merge_alternates(
-                        existing, replacements
-                    )
-                    alternates[target] = new_alternates
-                    if existing != new_alternates:
-                        logger.info(
-                            f"added: {self._feature_tag}: "
-                            f"{target} -> {', '.join(new_alternates)}"
-                        )
-                    else:
-                        logger.info(
-                            f"already in font: {self._feature_tag}: "
-                            f"{target} -> {', '.join(new_alternates)}"
-                        )
-                    return []
+        new_subtable = otTables_.AlternateSubst()
+        new_subtable.alternates = {
+            target: [replacement] for target, replacement in mapping.items()
+        }
 
-        return replacements
+        old_lookup = self._gsub.table.LookupList.Lookup[lookup_index]
+        if old_lookup.LookupType == 1:
+            new_lookup = otTables.Lookup()
+            new_lookup.LookupType = 3
+            new_lookup.LookupFlag = 0
+            new_lookup.SubTableCount = 1
+            new_lookup.SubTable = [new_subtable]
+
+            self._gsub.table.LookupList.Lookup[lookup_index] = new_lookup
+            self._lookup_adder = GSUBLookupType3RuleAdder(
+                self._feature_tag, new_lookup
+            )
+        elif old_lookup.LookupType == 7:
+            new_st = otTables.ExtensionSubst()
+            new_st.Format = 1
+            new_st.ExtensionLookupType = 3
+            new_st.ExtSubTable = new_subtable
+
+            old_lookup.SubTableCount = 1
+            old_lookup.SubTable = [new_st]
+            self._lookup_adder = GSUBLookupType7AlternateSubstRuleAdder(
+                self._feature_tag, old_lookup
+            )
+        else:
+            assert False, f"unexpected lookup type: {old_lookup.LookupType}"
 
     def add_rule(self, target: str, replacements_: Iterable[str]) -> None:
-        replacements = list(replacements_)
-        replacements = self._try_add_rule_existing_single(target, replacements)
-        if not replacements:
+        replacements = _merge_alternates([], replacements_)
+        success = self._lookup_adder.try_add_rule(target, replacements)
+        if success:
             return
-        replacements = self._try_add_rule_existing_alternate(
-            target, replacements
-        )
-        if not replacements:
-            return
-        if len(replacements) == 1:
-            subtable = self._get_default_lookup_single_subtable()
-            mapping = cast("dict[str, str]", subtable.mapping)
-            mapping[target] = replacements[0]
-        else:
-            subtable = self._get_default_lookup_alternate_subtable()
-            alternates = cast("dict[str, list[str]]", subtable.alternates)
-            alternates[target] = replacements
-
-        logger.info(
-            f"added: {self._feature_tag}: "
-            f"{target} -> {', '.join(replacements)}"
-        )
+        self._upgrade_lookup_to_alternate()
+        success = self._lookup_adder.try_add_rule(target, replacements)
+        assert success
 
 
 class GSUBRuleAdder:
