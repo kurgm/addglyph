@@ -325,6 +325,9 @@ class AddGlyphHandler:
         # Retain old codepages
         os2.setCodePageRanges(old_codepages | new_codepages)
 
+        if self._gsub_adder is not None:
+            self._gsub_adder.reorder_lookups()
+
         logger.info(f"{self._adder.added_count} glyphs added!")
         logger.info("saving...")
 

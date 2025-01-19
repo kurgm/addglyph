@@ -351,6 +351,10 @@ class GSUBRuleAdder:
             self._gsub, language_systems
         )
 
+        self._initial_lookup_count: int = (
+            self._gsub.table.LookupList.LookupCount
+        )
+
     @staticmethod
     def _get_dflt_langsys(
         gsub: G_S_U_B_.table_G_S_U_B_, langsys_tags: Sequence[tuple[Tag, Tag]]
@@ -518,3 +522,106 @@ class GSUBRuleAdder:
             self._get_feature_adder(feature_index).add_rule(
                 target, replacements
             )
+
+    def reorder_lookups(self):
+        # If the original font has lookups for "vert" or "vrt2" features at
+        # the end of the lookup list, keep them at the end.
+
+        initial_lookup_count = self._initial_lookup_count
+
+        # If no lookup was added, do nothing
+        if self._gsub.table.LookupList.LookupCount == initial_lookup_count:
+            return
+
+        to_be_final_lookup_indices: set[int] = set()
+        for feature_record in self._gsub.table.FeatureList.FeatureRecord:
+            if feature_record.FeatureTag in ("vert", "vrt2"):
+                to_be_final_lookup_indices.update(
+                    cast("list[int]", feature_record.Feature.LookupListIndex)
+                )
+
+        insertion_position = initial_lookup_count
+        while insertion_position - 1 in to_be_final_lookup_indices:
+            insertion_position -= 1
+
+        if insertion_position == initial_lookup_count:
+            return
+
+        index_lookup = list(enumerate(self._gsub.table.LookupList.Lookup))
+        index_lookup[insertion_position:] = (
+            index_lookup[initial_lookup_count:]
+            + index_lookup[insertion_position:initial_lookup_count]
+        )
+        self._gsub.table.LookupList.Lookup[:] = [
+            lookup for _, lookup in index_lookup
+        ]
+
+        index_mapping = {
+            old_index: new_index
+            for new_index, (old_index, _) in enumerate(index_lookup)
+        }
+
+        # Remap lookup indices in lookups
+        for st in [
+            st
+            for lookup in self._gsub.table.LookupList.Lookup
+            for st in lookup.SubTable
+        ]:
+            if isinstance(st, otTables.ExtensionSubst):
+                st = st.ExtSubTable
+
+            subst_lookup_records = []
+            if isinstance(st, otTables.ContextSubst):
+                if st.Format == 1:
+                    subst_lookup_records = [
+                        lr
+                        for rs in st.SubRuleSet
+                        for r in rs.SubRule
+                        for lr in r.SubstLookupRecord
+                    ]
+                elif st.Format == 2:
+                    subst_lookup_records = [
+                        lr
+                        for rs in st.SubClassSet
+                        for r in rs.SubClassRule
+                        for lr in r.SubstLookupRecord
+                    ]
+                elif st.Format == 3:
+                    subst_lookup_records = st.SubstLookupRecord
+            if isinstance(st, otTables.ChainContextSubst):
+                if st.Format == 1:
+                    subst_lookup_records = [
+                        lr
+                        for rs in st.ChainSubRuleSet
+                        for r in rs.ChainSubRule
+                        for lr in r.SubstLookupRecord
+                    ]
+                elif st.Format == 2:
+                    subst_lookup_records = [
+                        lr
+                        for rs in st.ChainSubClassSet
+                        for r in rs.ChainSubClassRule
+                        for lr in r.SubstLookupRecord
+                    ]
+                elif st.Format == 3:
+                    subst_lookup_records = st.SubstLookupRecord
+            for lr in subst_lookup_records:
+                lr.LookupListIndex = index_mapping[lr.LookupListIndex]
+
+        # Remap lookup indices in features
+        features = [
+            feature_record.Feature
+            for feature_record in self._gsub.table.FeatureList.FeatureRecord
+        ]
+        if hasattr(self._gsub.table, "FeatureVariations"):
+            feature_variations = self._gsub.table.FeatureVariations
+            features += [
+                sr.Feature
+                for vr in feature_variations.FeatureVariationRecord
+                for sr in vr.FeatureTableSubstitution.SubstitutionRecord
+            ]
+        for feature in features:
+            feature.LookupListIndex = [
+                index_mapping[lookup_index]
+                for lookup_index in feature.LookupListIndex
+            ]
