@@ -305,7 +305,9 @@ class GSUBFeatureRuleAdder:
         if old_lookup.LookupType == 1:
             new_lookup = otTables.Lookup()
             new_lookup.LookupType = 3
-            new_lookup.LookupFlag = 0
+            new_lookup.LookupFlag = old_lookup.LookupFlag
+            if old_lookup.LookupFlag & 0x0010:
+                new_lookup.MarkFilteringSet = old_lookup.MarkFilteringSet
             new_lookup.SubTableCount = 1
             new_lookup.SubTable = [new_subtable]
 
