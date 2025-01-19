@@ -233,7 +233,10 @@ class GSUBLookupType7AlternateSubstRuleAdder(GSUBAlternateSubstRuleAdder):
 
 class GSUBFeatureRuleAdder:
     def __init__(
-        self, gsub: G_S_U_B_.table_G_S_U_B_, feature_index: int
+        self,
+        gsub: G_S_U_B_.table_G_S_U_B_,
+        feature_index: int,
+        lookup_adders: dict[int, GSUBLookupRuleAdder],
     ) -> None:
         self._gsub = gsub
         feature_record = gsub.table.FeatureList.FeatureRecord[feature_index]
@@ -259,6 +262,12 @@ class GSUBFeatureRuleAdder:
             gsub.table.LookupList.LookupCount += 1
             lookup_indices.append(lookup_index)
             self._feature.LookupCount += 1
+
+        self._lookup_adders = lookup_adders
+        self._lookup_index = lookup_index
+
+        if lookup_index in lookup_adders:
+            return
 
         if lookup.LookupType == 1:
             lookup_adder = GSUBLookupType1RuleAdder(self._feature_tag, lookup)
@@ -288,20 +297,19 @@ class GSUBFeatureRuleAdder:
                 f"of unsupported type: {lookup.LookupType}"
             )
 
-        self._lookup_adder = lookup_adder
+        lookup_adders[lookup_index] = lookup_adder
 
     def _upgrade_lookup_to_alternate(self) -> None:
-        lookup_index = cast("list[int]", self._feature.LookupListIndex)[0]
-
-        assert isinstance(self._lookup_adder, GSUBSingleSubstRuleAdder)
-        mapping = self._lookup_adder.get_merged_mapping()
+        lookup_adder = self._lookup_adders[self._lookup_index]
+        assert isinstance(lookup_adder, GSUBSingleSubstRuleAdder)
+        mapping = lookup_adder.get_merged_mapping()
 
         new_subtable = otTables_.AlternateSubst()
         new_subtable.alternates = {
             target: [replacement] for target, replacement in mapping.items()
         }
 
-        old_lookup = self._gsub.table.LookupList.Lookup[lookup_index]
+        old_lookup = self._gsub.table.LookupList.Lookup[self._lookup_index]
         if old_lookup.LookupType == 1:
             new_lookup = otTables.Lookup()
             new_lookup.LookupType = 3
@@ -311,8 +319,8 @@ class GSUBFeatureRuleAdder:
             new_lookup.SubTableCount = 1
             new_lookup.SubTable = [new_subtable]
 
-            self._gsub.table.LookupList.Lookup[lookup_index] = new_lookup
-            self._lookup_adder = GSUBLookupType3RuleAdder(
+            self._gsub.table.LookupList.Lookup[self._lookup_index] = new_lookup
+            lookup_adder = GSUBLookupType3RuleAdder(
                 self._feature_tag, new_lookup
             )
         elif old_lookup.LookupType == 7:
@@ -323,19 +331,25 @@ class GSUBFeatureRuleAdder:
 
             old_lookup.SubTableCount = 1
             old_lookup.SubTable = [new_st]
-            self._lookup_adder = GSUBLookupType7AlternateSubstRuleAdder(
+            lookup_adder = GSUBLookupType7AlternateSubstRuleAdder(
                 self._feature_tag, old_lookup
             )
         else:
             assert False, f"unexpected lookup type: {old_lookup.LookupType}"
 
+        self._lookup_adders[self._lookup_index] = lookup_adder
+
     def add_rule(self, target: str, replacements_: Iterable[str]) -> None:
         replacements = _merge_alternates([], replacements_)
-        success = self._lookup_adder.try_add_rule(target, replacements)
+        success = self._lookup_adders[self._lookup_index].try_add_rule(
+            target, replacements
+        )
         if success:
             return
         self._upgrade_lookup_to_alternate()
-        success = self._lookup_adder.try_add_rule(target, replacements)
+        success = self._lookup_adders[self._lookup_index].try_add_rule(
+            target, replacements
+        )
         assert success
 
 
@@ -346,6 +360,7 @@ class GSUBRuleAdder:
         self._gsub = cast("G_S_U_B_.table_G_S_U_B_", ttf["GSUB"])
         self._feature_indices_by_tag: dict[Tag, set[int]] = {}
         self._feature_adders: dict[int, GSUBFeatureRuleAdder] = {}
+        self._lookup_adders: dict[int, GSUBLookupRuleAdder] = {}
 
         self._dflt_langsys = self._get_dflt_langsys(
             self._gsub, language_systems
@@ -510,7 +525,7 @@ class GSUBRuleAdder:
     def _get_feature_adder(self, feature_index: int) -> GSUBFeatureRuleAdder:
         if feature_index not in self._feature_adders:
             self._feature_adders[feature_index] = GSUBFeatureRuleAdder(
-                self._gsub, feature_index
+                self._gsub, feature_index, self._lookup_adders
             )
         return self._feature_adders[feature_index]
 
@@ -546,6 +561,8 @@ class GSUBRuleAdder:
 
         if insertion_position == initial_lookup_count:
             return
+
+        self._lookup_adders.clear()
 
         index_lookup = list(enumerate(self._gsub.table.LookupList.Lookup))
         index_lookup[insertion_position:] = (
