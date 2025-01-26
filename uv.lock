@@ -6,7 +6,7 @@ name = "addglyph"
 version = "2.3"
 source = { virtual = "." }
 dependencies = [
-    { name = "fonttools" },
+    { name = "fonttools", extra = ["repacker"] },
 ]
 
 [package.dev-dependencies]
@@ -15,7 +15,7 @@ build = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "fonttools", specifier = "==4.55.3" }]
+requires-dist = [{ name = "fonttools", extras = ["repacker"], specifier = "==4.55.3" }]
 
 [package.metadata.requires-dev]
 build = [{ name = "pyinstaller", specifier = ">=6.11.1" }]
@@ -44,6 +44,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fc/a8/4bf98840ff89fcc188470b59daec57322178bf36d2f4f756cd19a42a826b/fonttools-4.55.3-cp313-cp313-win32.whl", hash = "sha256:8c5ec45428edaa7022f1c949a632a6f298edc7b481312fc7dc258921e9399628", size = 2160178 },
     { url = "https://files.pythonhosted.org/packages/e6/57/4cc35004605416df3225ff362f3455cf09765db00df578ae9e46d0fefd23/fonttools-4.55.3-cp313-cp313-win_amd64.whl", hash = "sha256:11e5de1ee0d95af4ae23c1a138b184b7f06e0b6abacabf1d0db41c90b03d834b", size = 2206102 },
     { url = "https://files.pythonhosted.org/packages/99/3b/406d17b1f63e04a82aa621936e6e1c53a8c05458abd66300ac85ea7f9ae9/fonttools-4.55.3-py3-none-any.whl", hash = "sha256:f412604ccbeee81b091b420272841e5ec5ef68967a9790e80bffd0e30b8e2977", size = 1111638 },
+]
+
+[package.optional-dependencies]
+repacker = [
+    { name = "uharfbuzz" },
 ]
 
 [[package]]
@@ -133,4 +138,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/43/54/292f26c208734e9a7f067aea4a7e282c080750c4546559b58e2e45413ca0/setuptools-75.6.0.tar.gz", hash = "sha256:8199222558df7c86216af4f84c30e9b34a61d8ba19366cc914424cdbd28252f6", size = 1337429 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/55/21/47d163f615df1d30c094f6c8bbb353619274edccf0327b185cc2493c2c33/setuptools-75.6.0-py3-none-any.whl", hash = "sha256:ce74b49e8f7110f9bf04883b730f4765b774ef3ef28f722cce7c273d253aaf7d", size = 1224032 },
+]
+
+[[package]]
+name = "uharfbuzz"
+version = "0.44.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/14/74/a91a21d115cb047a60e72edbf87a66a6cfc6f0fa477b6ab3935eb229a236/uharfbuzz-0.44.0.tar.gz", hash = "sha256:3bc883f9b5d803f5ede08d1ad5b91dc1c768e9de902bc44e09468457c1c2e145", size = 1544488 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/6d/52db4bf56d418df265cfbba4bcee07b5544a59a955ab728ba177f64ccf09/uharfbuzz-0.44.0-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:79db18fb2a6227b85e948820350a9c4a20fe7245e9e174607465fae4d34d0ce3", size = 2888409 },
+    { url = "https://files.pythonhosted.org/packages/a2/d1/556edc738651b5d9f0c7d3814f3bc652422465e2cf7d87d33b2e0009cbaa/uharfbuzz-0.44.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:1b8e3ac66a9eb268264437b00d706c05942542631398ea08384377c96cba3f73", size = 1506468 },
+    { url = "https://files.pythonhosted.org/packages/75/f8/73243d29d04261fb0fb53d43ec5cee5530cc56b8051a4fd67cc2b29e7039/uharfbuzz-0.44.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:f1ec0e1c8749d5bb0ad738956277195d21dbe4b894cbfb3bf923a87a428588f1", size = 1390703 },
+    { url = "https://files.pythonhosted.org/packages/ad/c4/922341fbe3cbbad7765a343e89c6c24d8188681a1c4a31e9774d0b96c8c1/uharfbuzz-0.44.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d503849d7792a8d6cbc84e65bc7508e650ad5cdabd54c79dce3673c420aaec0c", size = 14902869 },
+    { url = "https://files.pythonhosted.org/packages/d2/fc/d7cb543a8d2e445833b8dc5911d32c2f2b87fdf4d96a81f19c037d53fda1/uharfbuzz-0.44.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:b4a93ed24f03870a56a81f7686dd7b38a3bba494d6c66d4121ff42df485080c4", size = 15402447 },
+    { url = "https://files.pythonhosted.org/packages/4b/22/3dafcb6ce460f6c0784c37c8394c0ae2a7f861c3e98bc05ad9b7fe3e3b96/uharfbuzz-0.44.0-cp313-cp313-win32.whl", hash = "sha256:2bbc43aad019c372fe26ca752bfaaeaba474bcea1574a815383a9676bb2dffb7", size = 985488 },
+    { url = "https://files.pythonhosted.org/packages/9d/f8/84f04bc33d4443c08bf3ae9ddccfc33fe6d08c8467df539651950f46ddaf/uharfbuzz-0.44.0-cp313-cp313-win_amd64.whl", hash = "sha256:cb3b392bd701e8befd8861391f52715fefdfdbafc19e4a277ce93aeac280f1b2", size = 1229818 },
 ]

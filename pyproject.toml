@@ -5,7 +5,7 @@ description = "フォントに空のグリフを追加するプログラム"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "fonttools==4.55.3",
+    "fonttools[repacker]==4.55.3",
 ]
 
 [dependency-groups]
