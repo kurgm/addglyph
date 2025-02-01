@@ -7,7 +7,7 @@
 
 ## 使い方
 
-プログラムの概要・使い方は [usage.txt](usage.txt) または `python -m addglyph -h` を参照されたし
+プログラムの概要・使い方はこのリポジトリの [Wiki](https://github.com/kurgm/addglyph/wiki) または `python -m addglyph -h` を参照されたし
 
 
 ## Windows バイナリのビルド
