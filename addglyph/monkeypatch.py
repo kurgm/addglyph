@@ -1,4 +1,4 @@
-# monkey patch based on fontTools version 4.55.3
+# monkey patch based on fontTools version 4.55.8
 
 # ruff: noqa: UP031
 
