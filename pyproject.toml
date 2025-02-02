@@ -1,6 +1,6 @@
 [project]
 name = "addglyph"
-version = "2.3"
+version = "3.0"
 description = "フォントに空のグリフを追加するプログラム"
 readme = "README.md"
 requires-python = ">=3.13"
